@@ -1,0 +1,6 @@
+# These networking variables are only necessary if using optional static and
+# remote networking features in the `tasks/networking` playbooks.
+ipv4_subnet_prefix: "10.0.0"
+ipv4_gateway: "10.0.0.1"
+dns4_servers: "{{ ipv4_gateway }}"
+active_internet_interface: "wlan0"

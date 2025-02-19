@@ -1,6 +1,6 @@
 ---
 - name: Setup Raspberry Pi
-  hosts: raspberrypi
+  hosts: raspberrypis
   become: true
   roles:
     - raspberry-pi
