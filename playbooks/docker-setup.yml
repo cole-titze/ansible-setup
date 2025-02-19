@@ -1,0 +1,6 @@
+---
+- name: Setup Docker
+  hosts: raspberrypis
+  become: true
+  roles:
+    - docker

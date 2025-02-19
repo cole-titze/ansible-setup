@@ -3,3 +3,9 @@
   scm: git
   version: master
   name: raspberry-pi
+
+# Docker role
+- src: git@github.com:cole-titze/ansible-role-docker.git
+  scm: git
+  version: main
+  name: docker
