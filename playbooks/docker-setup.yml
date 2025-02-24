@@ -2,5 +2,9 @@
 - name: Setup Docker
   hosts: raspberrypis
   become: true
+  vars:
+    ansible-files-path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible-files-path }}/vars/duckdns_vars.yml"
   roles:
     - docker
