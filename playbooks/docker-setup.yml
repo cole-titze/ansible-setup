@@ -1,6 +1,6 @@
 ---
 - name: Setup Docker
-  hosts: raspberrypis
+  hosts: docker
   become: true
   vars:
     ansible_files_path: "~/source/ansible-files"
