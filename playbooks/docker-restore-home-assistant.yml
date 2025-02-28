@@ -1,0 +1,59 @@
+---
+- name: Setup Docker
+  hosts: docker
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/duckdns_vars.yml"
+  tasks:
+    - name: Pause Home Assistant container
+      community.docker.docker_container:
+        name: home-assistant
+        state: stopped
+
+    - name: Remove /var/homeassistant directory
+      file:
+        path: /var/homeassistant
+        state: absent
+
+    - name: Ensure /var/homeassistant directory exists
+      ansible.builtin.file:
+        path: /var/homeassistant
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+    
+    - name: Copy Home Assistant backups if present
+      ansible.builtin.copy:
+        src: "{{ ansible_files_path }}/backups/home-assistant/"
+        dest: "/home/{{ ansible_user }}/backups/homeassistant"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+        directory_mode: '0755'
+        remote_src: false
+        force: false
+
+    - name: Check if Home Assistant backups are present
+      ansible.builtin.find:
+        paths: "/home/{{ ansible_user }}/backups/homeassistant"
+        patterns: "*"
+      register: backup_files
+
+    - name: Extract the latest Home Assistant backup into /var/homeassistant
+      ansible.builtin.shell: |
+        latest_backup=$(ls -Art "/home/{{ ansible_user }}/backups/homeassistant" | tail -n 1)
+        tar -xOf "/home/{{ ansible_user }}/backups/homeassistant/$latest_backup" "./homeassistant.tar.gz" | tar --strip-components=1 -zxf - -C /var/homeassistant
+      args:
+        executable: /bin/bash
+      when: 
+        - backup_files.matched > 0
+      become: true
+
+    - name: Restart Home Assistant container
+      community.docker.docker_container:
+        name: home-assistant
+        state: started
+        restart: true
