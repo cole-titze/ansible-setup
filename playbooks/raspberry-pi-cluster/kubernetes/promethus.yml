@@ -27,3 +27,6 @@
         values:
           alertmanager:
             enabled: false
+          service:
+            type: NodePort
+            nodePort: 9090

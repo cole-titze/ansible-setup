@@ -1,0 +1,26 @@
+---
+- name: Deploy Kubernetes Dashboard using Helm
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Add Kubernetes Dashboard Helm repository
+      kubernetes.core.helm_repository:
+        name: kubernetes-dashboard
+        repo_url: https://kubernetes.github.io/dashboard/
+
+    - name: Update Helm repositories
+      command: helm repo update
+      changed_when: false
+
+    - name: Install Kubernetes Dashboard with NodePort 30001
+      kubernetes.core.helm:
+        name: kubernetes-dashboard
+        chart_ref: kubernetes-dashboard/kubernetes-dashboard
+        release_namespace: kubernetes-dashboard
+        create_namespace: true
+        values:
+          service:
+            type: NodePort
+            nodePort: 30001

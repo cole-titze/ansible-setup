@@ -122,3 +122,7 @@
 - name: Set up Prometheus.
   import_playbook: tasks/kubernetes/prometheus.yml
   tags: ['prometheus']
+
+- name: Set up Dashboard.
+  import_playbook: tasks/kubernetes/dashboard.yml
+  tags: ['dashboard']
