@@ -3,4 +3,4 @@
   hosts: raspberrypis
   become: true
   roles:
-    - raspberry-pi
+    - nfs

@@ -9,3 +9,9 @@
   scm: git
   version: main
   name: docker
+
+  # nfs role
+- src: git@github.com:cole-titze/ansible-role-nfs.git
+  scm: git
+  version: main
+  name: nfs
