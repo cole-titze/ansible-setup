@@ -1,0 +1,27 @@
+---
+- name: Clear Kubernetes Resources
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Delete all pods, deployments, services, daemonsets, statefulsets, and jobs in all namespaces
+      command: kubectl delete --all pods,deployments,services,daemonsets,statefulsets,replicasets,ingresses,jobs,cronjobs --force --grace-period=0 --all-namespaces
+      ignore_errors: true
+
+    - name: Delete all ConfigMaps and Secrets
+      command: kubectl delete --all configmaps,secrets --all-namespaces
+      ignore_errors: true
+
+    - name: Delete all PersistentVolumeClaims (PVCs)
+      command: kubectl delete --all pvc --all-namespaces
+      ignore_errors: true
+
+    - name: Delete all Helm releases
+      command: helm list -A -q | xargs -r helm uninstall -n kube-system
+      ignore_errors: true
+
+    - name: Delete all namespaces except kube-system, default, and kube-public
+      command: >
+        kubectl get ns --no-headers -o custom-columns=:metadata.name |
+        grep -vE '^(default|kube-system|kube-public)$' |
+        xargs -r kubectl delete ns
+      ignore_errors: true

@@ -57,7 +57,7 @@
   become: true
 
   vars_files:
-    - config.yml
+    - storage/config.yml
 
   tasks:
     - name: Install K3s on control plane (takes a while).

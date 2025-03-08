@@ -14,10 +14,14 @@
       command: helm repo update
       changed_when: false
 
-    - name: Install Kubernetes Dashboard
+    - name: Install Kubernetes Dashboard with a different port
       kubernetes.core.helm:
         name: kubernetes-dashboard
         chart_ref: kubernetes-dashboard/kubernetes-dashboard
-        release_namespace: default
+        release_namespace: kubernetes-dashboard
         create_namespace: true
-        state: present
+        values:
+          service:
+            type: NodePort
+            nodePort: 30001  # Set a different NodePort
+          containerPort: 9091  # Change the internal container port
