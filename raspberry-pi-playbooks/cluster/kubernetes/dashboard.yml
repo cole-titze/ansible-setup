@@ -14,13 +14,10 @@
       command: helm repo update
       changed_when: false
 
-    - name: Install Kubernetes Dashboard with NodePort 30001
+    - name: Install Kubernetes Dashboard
       kubernetes.core.helm:
         name: kubernetes-dashboard
         chart_ref: kubernetes-dashboard/kubernetes-dashboard
-        release_namespace: kubernetes-dashboard
+        release_namespace: default
         create_namespace: true
-        values:
-          service:
-            type: NodePort
-            nodePort: 30001
+        state: present

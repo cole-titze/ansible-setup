@@ -48,7 +48,7 @@
 
   tasks:
     - name: Set up storage.
-      include_tasks: tasks/storage/filesystem.yml
+      include_tasks: storage/filesystem.yml
 
 
 - name: Configure the control plane.
@@ -112,17 +112,17 @@
         creates: /var/lib/rancher/k3s/agent/kubelet.kubeconfig
 
 - name: Set up Helm.
-  import_playbook: tasks/kubernetes/helm.yml
+  import_playbook: kubernetes/helm.yml
   tags: ['helm']
 
 - name: Set up NFS PVCs.
-  import_playbook: tasks/kubernetes/nfs.yml
+  import_playbook: kubernetes/nfs.yml
   tags: ['nfs']
 
 - name: Set up Prometheus.
-  import_playbook: tasks/kubernetes/prometheus.yml
+  import_playbook: kubernetes/prometheus.yml
   tags: ['prometheus']
 
 - name: Set up Dashboard.
-  import_playbook: tasks/kubernetes/dashboard.yml
+  import_playbook: kubernetes/dashboard.yml
   tags: ['dashboard']
