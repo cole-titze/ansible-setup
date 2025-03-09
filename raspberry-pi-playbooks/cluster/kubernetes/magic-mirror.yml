@@ -1,0 +1,23 @@
+---
+- name: Configure Magic Mirror
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create magic mirror namespace.
+      k8s:
+        name: magic-mirror
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Apply magic mirror manifests.
+      k8s:
+        definition: "{{ lookup('template', 'magic-mirror-template.yml' ) }}"
+        state: present

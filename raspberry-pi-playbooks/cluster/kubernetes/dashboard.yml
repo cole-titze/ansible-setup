@@ -4,6 +4,11 @@
   gather_facts: false
   become: true
 
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
   tasks:
     - name: Add Kubernetes Dashboard Helm repository
       kubernetes.core.helm_repository:
@@ -14,14 +19,104 @@
       command: helm repo update
       changed_when: false
 
-    - name: Install Kubernetes Dashboard with a different port
+    - name: Install Kubernetes Dashboard
       kubernetes.core.helm:
         name: kubernetes-dashboard
         chart_ref: kubernetes-dashboard/kubernetes-dashboard
         release_namespace: kubernetes-dashboard
         create_namespace: true
-        values:
-          service:
+    
+    - name: Create or update kubernetes-dashboard service with multiple ports
+      kubernetes.core.k8s:
+        state: present
+        api_version: v1
+        kind: Service
+        namespace: kubernetes-dashboard
+        name: kubernetes-dashboard
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: kubernetes-dashboard-kong-proxy
+            namespace: kubernetes-dashboard
+          spec:
             type: NodePort
-            nodePort: 30001  # Set a different NodePort
-          containerPort: 9091  # Change the internal container port
+            ports:
+              - name: http-8083
+                port: 443
+                targetPort: 30083
+                nodePort: 30083
+
+    - name: Create Service Account for Dashboard
+      kubernetes.core.k8s:
+        state: present
+        api_version: v1
+        kind: ServiceAccount
+        namespace: kubernetes-dashboard
+        name: dashboard-admin-sa
+
+    - name: Bind the Service Account to Cluster-Admin role
+      kubernetes.core.k8s:
+        state: present
+        api_version: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        name: dashboard-admin-sa-binding
+        namespace: kubernetes-dashboard
+        definition:
+          kind: ClusterRoleBinding
+          apiVersion: rbac.authorization.k8s.io/v1
+          metadata:
+            name: dashboard-admin-sa-binding
+          subjects:
+            - kind: ServiceAccount
+              name: dashboard-admin-sa
+              namespace: kubernetes-dashboard
+          roleRef:
+            kind: ClusterRole
+            name: cluster-admin
+            apiGroup: rbac.authorization.k8s.io
+
+    - name: Check if token already exists for dashboard-admin-sa
+      shell: |
+        kubectl get secrets -n kubernetes-dashboard -o json | \
+        jq -r '.items[] | select(.metadata.annotations."kubernetes.io/service-account.name"=="dashboard-admin-sa") | .data.token' || true
+      register: existing_token
+      changed_when: false
+      failed_when: false
+
+    - name: Generate a new token if none exists
+      shell: |
+        kubectl -n kubernetes-dashboard create token dashboard-admin-sa
+      register: dashboard_token
+      when: existing_token.stdout == ""
+      changed_when: true
+
+    - name: Show the generated token
+      debug:
+        msg: "Use this token to log in: {{ dashboard_token.stdout }}"
+      when: existing_token.stdout == ""
+
+    - name: Inform that token already exists
+      debug:
+        msg: "A token already exists for the service account."
+      when: existing_token.stdout != ""
+
+    - name: Expose the ingress via port 30083
+      kubernetes.core.k8s:
+        state: present
+        api_version: networking.k8s.io/v1
+        kind: Ingress
+        name: kubernetes-dashboard-ingress
+        namespace: kubernetes-dashboard
+        definition:
+          spec:
+            rules:
+              - http:
+                  paths:
+                    - path: /
+                      pathType: Prefix
+                      backend:
+                        service:
+                          name: kubernetes-dashboard-kong-proxy
+                          port:
+                            number: 30083
