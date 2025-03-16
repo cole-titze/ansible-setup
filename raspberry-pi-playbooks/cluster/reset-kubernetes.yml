@@ -2,26 +2,42 @@
 - name: Clear Kubernetes Resources
   hosts: control_plane
   become: true
+  
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+  
   tasks:
-    - name: Delete all pods, deployments, services, daemonsets, statefulsets, and jobs in all namespaces
-      command: kubectl delete --all pods,deployments,services,daemonsets,statefulsets,replicasets,ingresses,jobs,cronjobs --force --grace-period=0 --all-namespaces
+    - name: Gather all Service Accounts across all namespaces
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: ServiceAccount
+      register: all_sa_facts
       ignore_errors: true
+  
+    - name: Delete all Service Accounts across all namespaces
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: ServiceAccount
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ item.metadata.namespace }}"
+      loop: "{{ all_sa_facts.resources }}"
+      when: all_sa_facts.resources | length > 0
 
-    - name: Delete all ConfigMaps and Secrets
-      command: kubectl delete --all configmaps,secrets --all-namespaces
-      ignore_errors: true
-
-    - name: Delete all PersistentVolumeClaims (PVCs)
-      command: kubectl delete --all pvc --all-namespaces
-      ignore_errors: true
-
-    - name: Delete all Helm releases
-      command: helm list -A -q | xargs -r helm uninstall -n kube-system
-      ignore_errors: true
-
-    - name: Delete all namespaces except kube-system, default, and kube-public
+    - name: Delete all resources in all namespaces
       command: >
-        kubectl get ns --no-headers -o custom-columns=:metadata.name |
-        grep -vE '^(default|kube-system|kube-public)$' |
-        xargs -r kubectl delete ns
+        kubectl delete --all pods,deployments,services,daemonsets,statefulsets,replicasets,ingresses,jobs,cronjobs,configmaps,secrets,pvc --force --grace-period=0 --all-namespaces
       ignore_errors: true
+
+    - name: Restart K3s service
+      systemd:
+        name: k3s
+        state: restarted
+
+    - name: Ensure K3s service is running
+      systemd:
+        name: k3s
+        state: started
+        enabled: yes

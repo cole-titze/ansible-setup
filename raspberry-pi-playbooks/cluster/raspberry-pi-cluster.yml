@@ -119,13 +119,13 @@
   import_playbook: kubernetes/nfs.yml
   tags: ['nfs']
 
-- name: Set up magic mirror.
-  import_playbook: kubernetes/magic-mirror.yml
-  tags: ['magic-mirror']
+# - name: Set up magic mirror.
+#   import_playbook: kubernetes/magic-mirror.yml
+#   tags: ['magic-mirror']
 
-- name: Set up Prometheus.
-  import_playbook: kubernetes/prometheus.yml
-  tags: ['prometheus']
+# - name: Set up Prometheus.
+#   import_playbook: kubernetes/prometheus.yml
+#   tags: ['prometheus']
 
 - name: Set up Dashboard.
   import_playbook: kubernetes/dashboard.yml
