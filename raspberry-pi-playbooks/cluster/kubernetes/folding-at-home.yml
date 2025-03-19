@@ -1,0 +1,90 @@
+---
+- name: Configure Magic Mirror
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/folding_vars.yml"
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create magic mirror namespace.
+      k8s:
+        name: folding-at-home
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Create Persistent Volume Claim for Folding@Home
+      kubernetes.core.k8s:
+        state: present
+        definition: |
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: fah-pvc
+            namespace: folding-at-home
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 10Gi
+
+    - name: Wait for PVC to be ready
+      kubernetes.core.k8s_info:
+        kind: PersistentVolumeClaim
+        name: fah-pvc
+        namespace: default
+      register: pvc_info
+      until: pvc_info.resources | length > 0 and pvc_info.resources[0].status.phase == "Bound"
+      retries: 10
+      delay: 5
+
+    - name: Deploy Folding@Home on Kubernetes as a Deployment
+      kubernetes.core.k8s:
+        state: present
+        definition: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: folding-at-home
+            namespace: folding-at-home
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: folding-at-home
+            template:
+              metadata:
+                labels:
+                  app: folding-at-home
+              spec:
+                containers:
+                  - name: fah
+                    image: lscr.io/linuxserver/foldingathome:latest
+                    env:
+                      - name: PUID
+                        value: "1000"
+                      - name: PGID
+                        value: "1000"
+                      - name: ACCOUNT_TOKEN
+                        value: "{{ folding_at_home_token }}"  # Your Folding@Home token
+                      - name: MACHINE_NAME
+                        value: "{{ inventory_hostname }}"  # Identifies each machine
+                    volumeMounts:
+                      - mountPath: /config
+                        name: fah-pvc
+                    resources:
+                      requests:
+                        cpu: "1000m"
+                        memory: "2Gi"
+                      limits:
+                        cpu: "2000m"
+                        memory: "4Gi"

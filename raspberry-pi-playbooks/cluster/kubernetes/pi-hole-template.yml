@@ -1,0 +1,109 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pihole
+  namespace: pihole
+  labels:
+    app: pihole
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pihole
+  template:
+    metadata:
+      labels:
+        app: pihole
+    spec:
+      containers:
+        - name: pihole
+          image: pihole/pihole:latest
+          ports:
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: web
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /etc/pihole
+              name: etc-pihole
+            - mountPath: /etc/dnsmasq.d
+              name: etc-dnsmasq
+          env:
+            - name: TZ
+              value: "America/Chicago"
+      volumes:
+        - name: etc-pihole
+          persistentVolumeClaim:
+            claimName: pihole-config
+        - name: etc-dnsmasq
+          persistentVolumeClaim:
+            claimName: dnsmasq-config
+
+# Create Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole
+  namespace: pihole
+spec:
+  type: NodePort
+  ports:
+    - name: dns-tcp
+      port: 53
+      targetPort: 53
+      protocol: TCP
+      nodePort: 30084
+    - name: dns-udp
+      port: 53
+      targetPort: 53
+      protocol: UDP
+      nodePort: 30084
+    - name: web
+      port: 80
+      targetPort: 80
+      protocol: TCP
+      nodePort: 30086
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+      nodePort: 30085
+  selector:
+    app: pihole
+
+# Create Persistent Volumes
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pihole-config
+  namespace: pihole
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dnsmasq-config
+  namespace: pihole
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
