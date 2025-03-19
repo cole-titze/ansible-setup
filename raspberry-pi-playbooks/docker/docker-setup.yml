@@ -5,6 +5,6 @@
   vars:
     ansible_files_path: "~/source/ansible-files"
   vars_files:
-    - "{{ ansible_files_path }}/vars/duckdns_vars.yml"
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
   roles:
     - docker

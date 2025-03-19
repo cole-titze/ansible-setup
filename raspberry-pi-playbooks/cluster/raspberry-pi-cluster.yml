@@ -127,6 +127,10 @@
   import_playbook: kubernetes/folding-at-home.yml
   tags: ['folding-at-home']
 
+- name: Set up monero miner.
+  import_playbook: kubernetes/monero-miner.yml
+  tags: ['monero-miner']
+
 - name: Set up pi hole.
   import_playbook: kubernetes/pi-hole.yml
   tags: ['pi-hole']

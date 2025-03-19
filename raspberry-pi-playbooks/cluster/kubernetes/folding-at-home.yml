@@ -6,7 +6,7 @@
   vars:
     ansible_files_path: "~/source/ansible-files"
   vars_files:
-    - "{{ ansible_files_path }}/vars/folding_vars.yml"
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
   environment:
     # The location of the kubeconfig file on the master.

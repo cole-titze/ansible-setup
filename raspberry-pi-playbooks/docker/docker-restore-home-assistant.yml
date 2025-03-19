@@ -2,10 +2,6 @@
 - name: Setup Docker
   hosts: docker
   become: true
-  vars:
-    ansible_files_path: "~/source/ansible-files"
-  vars_files:
-    - "{{ ansible_files_path }}/vars/duckdns_vars.yml"
   tasks:
     - name: Pause Home Assistant container
       community.docker.docker_container:

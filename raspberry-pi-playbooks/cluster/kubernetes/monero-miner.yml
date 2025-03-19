@@ -1,0 +1,55 @@
+---
+- name: Configure Magic Mirror
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create monero mining namespace.
+      k8s:
+        name: monero-miner
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Deploy Monero Miner on Kubernetes as a Deployment
+      kubernetes.core.k8s:
+        state: present
+        definition: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: monero-miner
+            namespace: monero-miner
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: monero-miner
+            template:
+              metadata:
+                labels:
+                  app: monero-miner
+              spec:
+                containers:
+                  - name: xmrig-miner
+                    image: ghcr.io/cole-titze/containers/monero-miner:latest
+                    env:
+                      - name: WALLET_ADDRESS
+                        value: "{{ monero_wallet_address }}"
+                    resources:
+                      requests:
+                        cpu: "1000m"
+                        memory: "2Gi"
+                      limits:
+                        cpu: "2000m"
+                        memory: "4Gi"
