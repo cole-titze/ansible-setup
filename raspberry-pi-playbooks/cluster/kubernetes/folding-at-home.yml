@@ -32,20 +32,11 @@
             namespace: folding-at-home
           spec:
             accessModes:
-              - ReadWriteOnce
+              - ReadWriteMany
             resources:
               requests:
                 storage: 10Gi
-
-    - name: Wait for PVC to be ready
-      kubernetes.core.k8s_info:
-        kind: PersistentVolumeClaim
-        name: fah-pvc
-        namespace: default
-      register: pvc_info
-      until: pvc_info.resources | length > 0 and pvc_info.resources[0].status.phase == "Bound"
-      retries: 10
-      delay: 5
+            storageClassName: nfs-client
 
     - name: Deploy Folding@Home on Kubernetes as a Deployment
       kubernetes.core.k8s:
@@ -76,11 +67,13 @@
                         value: "1000"
                       - name: ACCOUNT_TOKEN
                         value: "{{ folding_at_home_token }}"  # Your Folding@Home token
-                      - name: MACHINE_NAME
-                        value: "{{ inventory_hostname }}"  # Identifies each machine
+                      - name: MACHINE_NAME  # Dynamically set the machine name
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: spec.nodeName
                     volumeMounts:
                       - mountPath: /config
-                        name: fah-pvc
+                        name: fah-storage
                     resources:
                       requests:
                         cpu: "1000m"
@@ -88,3 +81,7 @@
                       limits:
                         cpu: "2000m"
                         memory: "4Gi"
+                volumes:
+                  - name: fah-storage
+                    persistentVolumeClaim:
+                      claimName: fah-pvc
