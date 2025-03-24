@@ -1,0 +1,10 @@
+---
+- name: Setup Macbook
+  hosts: docker
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+  roles:
+    - macbook

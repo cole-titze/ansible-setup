@@ -13,6 +13,13 @@
     PATH: "~/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
+    - name: Create prometheus namespace.
+      k8s:
+        name: prometheus
+        api_version: v1
+        kind: Namespace
+        state: present
+  
     - name: Add prometheus-community chart repo.
       kubernetes.core.helm_repository:
         name: prometheus-community
@@ -27,3 +34,18 @@
         values:
           alertmanager:
             enabled: false
+
+    - name: Patch the cluster-monitoring-grafana service to NodePort
+      kubernetes.core.k8s:
+        state: patched
+        api_version: v1
+        kind: Service
+        namespace: default
+        name: cluster-monitoring-grafana
+        definition:
+          spec:
+            type: NodePort
+            ports:
+              - port: 80
+                targetPort: 80
+                nodePort: 30084
