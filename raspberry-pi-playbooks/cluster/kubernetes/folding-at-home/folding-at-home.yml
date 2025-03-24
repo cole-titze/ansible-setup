@@ -1,0 +1,26 @@
+---
+- name: Configure Magic Mirror
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create magic mirror namespace.
+      k8s:
+        name: folding-at-home
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Apply folding at home manifests.
+      k8s:
+        definition: "{{ lookup('template', 'folding-at-home-template.yml' ) }}"
+        state: present

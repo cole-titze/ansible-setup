@@ -112,24 +112,24 @@
         creates: /var/lib/rancher/k3s/agent/kubelet.kubeconfig
 
 - name: Set up Helm.
-  import_playbook: kubernetes/helm.yml
+  import_playbook: kubernetes/helm/helm.yml
   tags: ['helm']
 
 - name: Set up NFS PVCs.
-  import_playbook: kubernetes/nfs.yml
+  import_playbook: kubernetes/nfs/nfs.yml
   tags: ['nfs']
 
 - name: Set up magic mirror.
-  import_playbook: kubernetes/magic-mirror.yml
+  import_playbook: kubernetes/magic-mirror/magic-mirror.yml
   tags: ['magic-mirror']
 
-- name: Set up monero miner. # TODO: DNS error occurring
-  import_playbook: kubernetes/monero-miner.yml
-  tags: ['monero-miner']
-
-- name: Set up folding at home. # TODO: Volumes seem to be failing
-  import_playbook: kubernetes/folding-at-home.yml
+- name: Set up folding at home.
+  import_playbook: kubernetes/folding-at-home/folding-at-home.yml
   tags: ['folding-at-home']
+
+# - name: Set up monero miner. # TODO: DNS error happening
+#   import_playbook: kubernetes/monero-miner.yml
+#   tags: ['monero-miner']
 
 # - name: Set up pi hole.
 #   import_playbook: kubernetes/pi-hole.yml
@@ -140,5 +140,5 @@
 #   tags: ['prometheus']
 
 - name: Set up Dashboard.
-  import_playbook: kubernetes/dashboard.yml
+  import_playbook: kubernetes/dashboard/dashboard.yml
   tags: ['dashboard']

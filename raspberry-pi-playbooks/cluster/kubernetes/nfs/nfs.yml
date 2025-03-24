@@ -5,7 +5,7 @@
   become: true
 
   vars_files:
-    - ../storage/config.yml
+    - ../../storage/config.yml
 
   environment:
     # The location of the kubeconfig file on the master.

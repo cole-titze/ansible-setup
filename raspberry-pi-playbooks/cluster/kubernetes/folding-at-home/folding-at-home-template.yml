@@ -1,0 +1,44 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: folding-at-home
+  namespace: folding-at-home
+spec:
+  serviceName: "folding-at-home"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: folding-at-home
+  template:
+    metadata:
+      labels:
+        app: folding-at-home
+    spec:
+      containers:
+        - name: fah
+          image: lscr.io/linuxserver/foldingathome:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: ACCOUNT_TOKEN
+              value: "{{ folding_at_home_token }}"  # Your Folding@Home token
+            - name: MACHINE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name  # Each pod gets its own name
+          volumeMounts:
+            - mountPath: /config
+              name: fah-storage
+  volumeClaimTemplates:
+    - metadata:
+        name: fah-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: nfs-client
