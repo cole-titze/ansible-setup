@@ -29,6 +29,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name  # Each pod gets its own name
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "1000m"
+              memory: "6Gi"
           volumeMounts:
             - mountPath: /config
               name: fah-storage
