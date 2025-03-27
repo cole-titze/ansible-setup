@@ -12,7 +12,7 @@
   tasks:
     - name: Create pi-hole namespace.
       k8s:
-        name: pihole
+        name: pi-hole
         api_version: v1
         kind: Namespace
         state: present
@@ -21,3 +21,6 @@
       k8s:
         definition: "{{ lookup('template', 'pi-hole-template.yml' ) }}"
         state: present
+
+    # - name: Setup port forwarding
+    # Needs to forward port 53 to pihole port

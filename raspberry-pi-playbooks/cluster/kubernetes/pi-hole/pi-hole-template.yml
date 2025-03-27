@@ -1,109 +1,107 @@
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pihole-config-pvc
+  namespace: pi-hole
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nfs-client
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pihole-dnsmasq-pvc
+  namespace: pi-hole
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nfs-client
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: pihole
-  namespace: pihole
-  labels:
-    app: pihole
+  name: pi-hole
+  namespace: pi-hole
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: pihole
+      app: pi-hole
   template:
     metadata:
       labels:
-        app: pihole
+        app: pi-hole
     spec:
       containers:
-        - name: pihole
+        - name: p-hole
           image: pihole/pihole:latest
           ports:
-            - name: dns-tcp
-              containerPort: 53
-              protocol: TCP
-            - name: dns-udp
-              containerPort: 53
+            - containerPort: 53
               protocol: UDP
-            - name: web
-              containerPort: 80
+            - containerPort: 53
               protocol: TCP
-            - name: https
-              containerPort: 443
+            - containerPort: 80
               protocol: TCP
-          volumeMounts:
-            - mountPath: /etc/pihole
-              name: etc-pihole
-            - mountPath: /etc/dnsmasq.d
-              name: etc-dnsmasq
+            - containerPort: 443
+              protocol: TCP
           env:
             - name: TZ
               value: "America/Chicago"
+            - name: DNS1
+              value: "127.0.0.1"
+            - name: DNS2
+              value: "1.1.1.1"
+          volumeMounts:
+            - name: pihole-config
+              mountPath: /etc/pihole
+            - name: pihole-dnsmasq
+              mountPath: /etc/dnsmasq.d
       volumes:
-        - name: etc-pihole
+        - name: pihole-config
           persistentVolumeClaim:
-            claimName: pihole-config
-        - name: etc-dnsmasq
+            claimName: pihole-config-pvc
+        - name: pihole-dnsmasq
           persistentVolumeClaim:
-            claimName: dnsmasq-config
+            claimName: pihole-dnsmasq-pvc
 
-# Create Service
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: pihole
-  namespace: pihole
+  name: pi-hole
+  namespace: pi-hole
 spec:
   type: NodePort
   ports:
-    - name: dns-tcp
-      port: 53
-      targetPort: 53
-      protocol: TCP
-      nodePort: 30084
     - name: dns-udp
       port: 53
       targetPort: 53
       protocol: UDP
-      nodePort: 30084
+      nodePort: 30095
+    - name: dns
+      port: 53
+      targetPort: 53
+      protocol: TCP
+      nodePort: 30094
     - name: web
       port: 80
       targetPort: 80
       protocol: TCP
-      nodePort: 30086
+      nodePort: 30093
     - name: https
       port: 443
       targetPort: 443
       protocol: TCP
-      nodePort: 30085
+      nodePort: 30092
   selector:
-    app: pihole
-
-# Create Persistent Volumes
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: pihole-config
-  namespace: pihole
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: dnsmasq-config
-  namespace: pihole
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+    app: pi-hole
