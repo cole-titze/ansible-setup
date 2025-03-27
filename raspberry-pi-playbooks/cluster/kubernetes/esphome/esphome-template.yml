@@ -1,0 +1,70 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: esphome
+  namespace: home-assistant
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: esphome
+  template:
+    metadata:
+      labels:
+        app: esphome
+    spec:
+      containers:
+        - name: esphome
+          image: ghcr.io/esphome/esphome:latest
+          ports:
+            - containerPort: 6052
+            - containerPort: 6123
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - mountPath: /config
+              name: esphome-storage
+      volumes:
+        - name: esphome-storage
+          persistentVolumeClaim:
+            claimName: esphome-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: esphome-pvc
+  namespace: home-assistant
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: esphome
+  namespace: home-assistant
+spec:
+  type: NodePort
+  ports:
+    - name: web
+      port: 6052
+      targetPort: 6052
+      protocol: TCP
+      nodePort: 30090
+    - name: api
+      port: 6123
+      targetPort: 6123
+      protocol: TCP
+      nodePort: 30091
+  selector:
+    app: esphome

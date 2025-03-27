@@ -145,6 +145,10 @@
   import_playbook: kubernetes/monero-miner/monero-miner.yml
   tags: ['monero-miner']
 
+- name: Set up esphome.
+  import_playbook: kubernetes/esphome/esphome.yml
+  tags: ['esphome']
+
 # - name: Set up pi hole.
 #   import_playbook: kubernetes/pi-hole.yml
 #   tags: ['pi-hole']

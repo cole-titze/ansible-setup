@@ -1,0 +1,23 @@
+---
+- name: Configure Esphome
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create home assistant namespace.
+      k8s:
+        name: home-assistant
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Apply esphome manifests.
+      k8s:
+        definition: "{{ lookup('template', 'esphome-template.yml' ) }}"
+        state: present
