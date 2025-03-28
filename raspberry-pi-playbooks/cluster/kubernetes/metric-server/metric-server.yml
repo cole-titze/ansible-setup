@@ -1,0 +1,29 @@
+---
+- name: Install Kubernetes Metrics Server
+  hosts: control_plane
+  become: true
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create metric-server namespace.
+      k8s:
+        name: metric-server
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Add Bitnami Helm Repository
+      kubernetes.core.helm_repository:
+        name: bitnami
+        repo_url: "https://charts.bitnami.com/bitnami"
+
+    - name: Update Helm Repositories
+      kubernetes.core.helm:
+        name: metrics-server
+        chart_ref: bitnami/metrics-server
+        release_namespace: metric-server
+        create_namespace: true

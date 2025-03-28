@@ -153,7 +153,13 @@
   import_playbook: kubernetes/pi-hole/pi-hole.yml
   tags: ['pi-hole']
 
-# - name: Set up prometheus
+- name: Set up metric server.
+  import_playbook: kubernetes/metric-server/metric-server.yml
+  tags: ['metric-server']
+
+- name: Set up Prometheus.
+  import_playbook: kubernetes/prometheus/prometheus.yml
+  tags: ['prometheus']
 
 - name: Set up Dashboard.
   import_playbook: kubernetes/dashboard/dashboard.yml
