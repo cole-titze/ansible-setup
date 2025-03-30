@@ -1,0 +1,17 @@
+---
+- name: Get CPU Temperature from Nodes
+  hosts: cluster
+  gather_facts: false
+  tasks:
+    - name: Read CPU temperature
+      command: cat /sys/class/thermal/thermal_zone0/temp
+      register: cpu_temp_raw
+      changed_when: false
+
+    - name: Convert temperature to Celsius
+      set_fact:
+        cpu_temp_c: "{{ cpu_temp_raw.stdout | int / 1000 }}"
+
+    - name: Display CPU temperature
+      debug:
+        msg: "Node {{ inventory_hostname }} CPU Temperature: {{ cpu_temp_c }}°C"

@@ -6,7 +6,7 @@ metadata:
   namespace: folding-at-home
 spec:
   serviceName: "folding-at-home"
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: folding-at-home
