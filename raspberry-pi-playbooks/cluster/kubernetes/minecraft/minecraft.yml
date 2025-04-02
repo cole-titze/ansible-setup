@@ -1,0 +1,41 @@
+---
+- name: Install Kubernetes Metrics Server
+  hosts: control_plane
+  become: true
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create minecraft namespace.
+      k8s:
+        name: minecraft
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Add itzg chart repo.
+      kubernetes.core.helm_repository:
+        name: itzg
+        repo_url: "https://itzg.github.io/minecraft-server-charts/"
+
+  # TODO: right now max ram is 1GB. Should increase to 15 or so
+    - name: Deploy Minecraft Helm chart.
+      kubernetes.core.helm:
+        name: minecraft
+        chart_ref: itzg/minecraft
+        chart_version: '4.26.1'
+        release_namespace: minecraft
+        state: present
+        values:
+          minecraftServer:
+            eula: true
+            Difficulty: easy
+            motd: "Welcome to Minecraft deployed via Helm and Ansible!"
+            serviceType: NodePort
+            # TODO: This doesn't work yet
+            service:
+              type: NodePort
+              nodePort: 31234

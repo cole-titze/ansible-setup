@@ -161,6 +161,10 @@
   import_playbook: kubernetes/dashboard/dashboard.yml
   tags: ['dashboard']
 
+- name: Set up minecraft
+  import_playbook: kubernetes/minecraft/minecraft.yml
+  tags: ['minecraft']
+
 # Services running in docker today
 # - name: Set up pi hole.
 #   import_playbook: kubernetes/pi-hole/pi-hole.yml
