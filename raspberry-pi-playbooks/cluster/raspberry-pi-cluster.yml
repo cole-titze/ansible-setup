@@ -133,6 +133,10 @@
   import_playbook: kubernetes/nfs/nfs.yml
   tags: ['nfs']
 
+- name: Set up minecraft
+  import_playbook: kubernetes/minecraft/minecraft.yml
+  tags: ['minecraft']
+
 - name: Set up magic mirror.
   import_playbook: kubernetes/magic-mirror/magic-mirror.yml
   tags: ['magic-mirror']
@@ -160,10 +164,6 @@
 - name: Set up Dashboard.
   import_playbook: kubernetes/dashboard/dashboard.yml
   tags: ['dashboard']
-
-- name: Set up minecraft
-  import_playbook: kubernetes/minecraft/minecraft.yml
-  tags: ['minecraft']
 
 # Services running in docker today
 # - name: Set up pi hole.

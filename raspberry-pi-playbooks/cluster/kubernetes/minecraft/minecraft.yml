@@ -21,7 +21,7 @@
         name: itzg
         repo_url: "https://itzg.github.io/minecraft-server-charts/"
 
-  # TODO: right now max ram is 1GB. Should increase to 15 or so
+    # TODO: Enable backups and clone them to cloud storage
     - name: Deploy Minecraft Helm chart.
       kubernetes.core.helm:
         name: minecraft
@@ -30,12 +30,14 @@
         release_namespace: minecraft
         state: present
         values:
+          resources:
+            requests:
+              memory: 12Gi
+              cpu: 3000m
           minecraftServer:
+            memory: 12G
             eula: true
             Difficulty: easy
             motd: "Welcome to Minecraft deployed via Helm and Ansible!"
             serviceType: NodePort
-            # TODO: This doesn't work yet
-            service:
-              type: NodePort
-              nodePort: 31234
+            nodePort: 31234

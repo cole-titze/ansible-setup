@@ -32,10 +32,10 @@ spec:
           resources:
             requests:
               cpu: "1000m"
-              memory: "2Gi"
+              memory: "1Gi"
             limits:
               cpu: "1000m"
-              memory: "6Gi"
+              memory: "4Gi"
           volumeMounts:
             - mountPath: /config
               name: fah-storage

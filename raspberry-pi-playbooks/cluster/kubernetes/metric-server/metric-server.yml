@@ -27,3 +27,11 @@
         chart_ref: bitnami/metrics-server
         release_namespace: metric-server
         create_namespace: true
+        values:
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
