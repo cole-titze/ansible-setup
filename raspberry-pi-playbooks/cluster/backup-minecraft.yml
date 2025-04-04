@@ -1,0 +1,63 @@
+---
+- name: Backup Minecraft Server
+  hosts: control_plane
+  become: true
+  gather_facts: yes
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Get Minecraft Pod Name
+      command: kubectl get pod -n minecraft -l app.kubernetes.io/name=minecraft -o jsonpath='{.items[0].metadata.name}'
+      register: mc_pod_name
+      changed_when: false
+
+    - name: Disable world saving (save-off)
+      command: kubectl exec -n minecraft {{ mc_pod_name.stdout }} -- rcon-cli save-off
+
+    - name: Force save-all
+      command: kubectl exec -n minecraft {{ mc_pod_name.stdout }} -- rcon-cli save-all
+
+    # Backup to local machine
+    - name: Define variables
+      set_fact:
+        backup_dir: "/tmp/minecraft_backup"
+        archive_name: "minecraft_backup_{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+    
+    - name: Ensure backup directory exists
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Backup Minecraft world data using kubectl cp
+      command: "kubectl cp minecraft/{{ mc_pod_name.stdout }}:/data {{ backup_dir }}"
+      register: mc_backup
+
+    - name: Archive the backup directory
+      archive:
+        path: "{{ backup_dir }}"
+        dest: "{{ backup_dir }}/{{ archive_name }}"
+        format: gz
+        remove: false
+    
+    - name: Fetch the backup archive to the local machine
+      fetch:
+        src: "{{ backup_dir }}/{{ archive_name }}"
+        dest: "{{ ansible_files_path }}/backups/minecraft/{{ archive_name }}"
+        flat: yes
+    
+    - name: Clean up remote backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: absent
+
+    - name: Re-enable world saving (save-on)
+      command: kubectl exec -n minecraft {{ mc_pod_name.stdout }} -- rcon-cli save-on

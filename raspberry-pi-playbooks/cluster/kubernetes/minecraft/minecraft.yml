@@ -2,6 +2,10 @@
 - name: Install Kubernetes Metrics Server
   hosts: control_plane
   become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
   environment:
     # The location of the kubeconfig file on the master.
@@ -41,3 +45,6 @@
             motd: "Welcome to Minecraft deployed via Helm and Ansible!"
             serviceType: NodePort
             nodePort: 31234
+            rcon:
+              enabled: true
+              password: "{{ minecraft_rcon_password }}"
