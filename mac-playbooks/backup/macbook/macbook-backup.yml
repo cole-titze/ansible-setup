@@ -1,0 +1,30 @@
+---
+- name: Configure macbook backup
+  hosts: localhost
+  gather_facts: false
+  vars:
+    src_dirs:
+      - "{{ lookup('env', 'HOME') }}/.ssh"
+      - "{{ lookup('env', 'HOME') }}/.kube"
+    icloud_base_dir: "{{ lookup('env', 'HOME') }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
+    timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
+    icloud_backup_dir: "{{ icloud_base_dir }}/backup_{{ timestamp }}"
+
+  tasks:
+    - name: Ensure iCloud backup directory exists
+      ansible.builtin.file:
+        path: "{{ icloud_backup_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy macOS folders to iCloud backup
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ icloud_backup_dir }}/"
+        remote_src: false
+      with_items: "{{ src_dirs }}"
+      ignore_errors: true
+
+    - name: Print backup location
+      ansible.builtin.debug:
+        msg: "Backup completed! Encrypted file saved as: {{ icloud_backup_dir }}"

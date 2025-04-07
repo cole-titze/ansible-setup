@@ -1,0 +1,27 @@
+---
+- name: Configure HA backup
+  hosts: docker
+  gather_facts: false
+  vars:
+    local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/home-assistant/"
+    remote_path: "/home/{{ ansible_user }}/backups/homeassistant/"
+  tasks:
+    - name: Ensure local backup dir for Home Assistant exists
+      ansible.builtin.file:
+        path: "{{ local_backup_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+
+    - name: Get list of backup files in remote directory
+      ansible.builtin.find:
+        paths: "/home/pi/backups/homeassistant/"
+        file_type: file
+      register: backup_files
+
+    - name: Fetch Home Assistant backups
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ local_backup_dir }}"
+        flat: yes
+      loop: "{{ backup_files.files }}"
