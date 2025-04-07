@@ -137,29 +137,29 @@
   import_playbook: minecraft/minecraft.yml
   tags: ['minecraft']
 
-# - name: Set up magic mirror.
-#   import_playbook: magic-mirror/magic-mirror.yml
-#   tags: ['magic-mirror']
+- name: Set up magic mirror.
+  import_playbook: magic-mirror/magic-mirror.yml
+  tags: ['magic-mirror']
 
-# - name: Set up folding at home.
-#   import_playbook: folding-at-home/folding-at-home.yml
-#   tags: ['folding-at-home']
+- name: Set up folding at home.
+  import_playbook: folding-at-home/folding-at-home.yml
+  tags: ['folding-at-home']
 
-# - name: Set up monero miner.
-#   import_playbook: monero-miner/monero-miner.yml
-#   tags: ['monero-miner']
+- name: Set up monero miner.
+  import_playbook: monero-miner/monero-miner.yml
+  tags: ['monero-miner']
 
-# - name: Set up esphome.
-#   import_playbook: esphome/esphome.yml
-#   tags: ['esphome']
+- name: Set up esphome.
+  import_playbook: esphome/esphome.yml
+  tags: ['esphome']
 
-# - name: Set up metric server.
-#   import_playbook: metric-server/metric-server.yml
-#   tags: ['metric-server']
+- name: Set up metric server.
+  import_playbook: metric-server/metric-server.yml
+  tags: ['metric-server']
 
-# - name: Set up Prometheus.
-#   import_playbook: prometheus/prometheus.yml
-#   tags: ['prometheus']
+- name: Set up Prometheus.
+  import_playbook: prometheus/prometheus.yml
+  tags: ['prometheus']
 
 - name: Set up Dashboard.
   import_playbook: dashboard/dashboard.yml
