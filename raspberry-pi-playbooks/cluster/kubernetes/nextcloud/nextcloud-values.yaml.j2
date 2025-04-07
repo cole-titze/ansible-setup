@@ -1,0 +1,26 @@
+# templates/nextcloud-values.yaml.j2
+nextcloud:
+  existingClaim: nextcloud-data
+  host: {{ nextcloud_domain }}
+  trustedDomains:
+    - {{ nextcloud_domain }}
+    - 10.0.0.62
+  username: admin
+  password: changeme
+  datadir: /var/www/html/data
+
+mariadb:
+  enabled: true
+  primary:
+    persistence:
+      existingClaim: nextcloud-db
+  auth:
+    rootPassword: changeme
+    username: nextcloud
+    password: changeme
+    database: nextcloud
+
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 32001

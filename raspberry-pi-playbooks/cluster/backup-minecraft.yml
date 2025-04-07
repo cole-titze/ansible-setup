@@ -30,7 +30,11 @@
       set_fact:
         backup_dir: "/tmp/minecraft_backup"
         archive_name: "minecraft_backup_{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
-    
+
+    - name: Pause for 5 seconds
+      pause:
+        seconds: 5
+
     - name: Ensure backup directory exists
       file:
         path: "{{ backup_dir }}"

@@ -44,11 +44,11 @@
         state: restarted
   
   vars_files:
-    - storage/config.yml
+    - ../storage/config.yml
 
   tasks:
     - name: Set up storage.
-      include_tasks: storage/filesystem.yml
+      include_tasks: ../storage/filesystem.yml
 
 
 - name: Configure the control plane.
@@ -126,46 +126,51 @@
         creates: /var/lib/rancher/k3s/agent/kubelet.kubeconfig
 
 - name: Set up Helm.
-  import_playbook: kubernetes/helm/helm.yml
+  import_playbook: helm/helm.yml
   tags: ['helm']
 
 - name: Set up NFS PVCs.
-  import_playbook: kubernetes/nfs/nfs.yml
+  import_playbook: nfs/nfs.yml
   tags: ['nfs']
 
 - name: Set up minecraft
-  import_playbook: kubernetes/minecraft/minecraft.yml
+  import_playbook: minecraft/minecraft.yml
   tags: ['minecraft']
 
-- name: Set up magic mirror.
-  import_playbook: kubernetes/magic-mirror/magic-mirror.yml
-  tags: ['magic-mirror']
+# - name: Set up magic mirror.
+#   import_playbook: magic-mirror/magic-mirror.yml
+#   tags: ['magic-mirror']
 
-- name: Set up folding at home.
-  import_playbook: kubernetes/folding-at-home/folding-at-home.yml
-  tags: ['folding-at-home']
+# - name: Set up folding at home.
+#   import_playbook: folding-at-home/folding-at-home.yml
+#   tags: ['folding-at-home']
 
-- name: Set up monero miner.
-  import_playbook: kubernetes/monero-miner/monero-miner.yml
-  tags: ['monero-miner']
+# - name: Set up monero miner.
+#   import_playbook: monero-miner/monero-miner.yml
+#   tags: ['monero-miner']
 
-- name: Set up esphome.
-  import_playbook: kubernetes/esphome/esphome.yml
-  tags: ['esphome']
+# - name: Set up esphome.
+#   import_playbook: esphome/esphome.yml
+#   tags: ['esphome']
 
-- name: Set up metric server.
-  import_playbook: kubernetes/metric-server/metric-server.yml
-  tags: ['metric-server']
+# - name: Set up metric server.
+#   import_playbook: metric-server/metric-server.yml
+#   tags: ['metric-server']
 
-- name: Set up Prometheus.
-  import_playbook: kubernetes/prometheus/prometheus.yml
-  tags: ['prometheus']
+# - name: Set up Prometheus.
+#   import_playbook: prometheus/prometheus.yml
+#   tags: ['prometheus']
 
 - name: Set up Dashboard.
-  import_playbook: kubernetes/dashboard/dashboard.yml
+  import_playbook: dashboard/dashboard.yml
   tags: ['dashboard']
 
-# Services running in docker today
+# Don't have a need for nextcloud yet
+# - name: Set up nextcloud
+#   import_playbook: nextcloud/nextcloud.yml
+#   tags: ['nextcloud']
+
+# Pihole is currently running in docker today
 # - name: Set up pi hole.
-#   import_playbook: kubernetes/pi-hole/pi-hole.yml
+#   import_playbook: pi-hole/pi-hole.yml
 #   tags: ['pi-hole']

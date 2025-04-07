@@ -81,14 +81,7 @@
       shell: |
         kubectl -n kubernetes-dashboard create token dashboard-admin-sa
       register: dashboard_token
-      when: new_sa_created | default(false)
 
     - name: Show the generated token
       debug:
         msg: "Use this token to log in: {{ dashboard_token.stdout }}"
-      when: new_sa_created | default(false)
-
-    - name: Inform that token already exists
-      debug:
-        msg: "A token already exists for the service account."
-      when: not new_sa_created | default(false)

@@ -1,0 +1,73 @@
+---
+- name: Configure Nextcloud
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  vars:
+    nextcloud_domain: node01.local
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create next cloud namespace.
+      k8s:
+        name: nextcloud
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Create PVC for Nextcloud data
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: nextcloud-data-pvc
+            namespace: nextcloud
+          spec:
+            accessModes:
+              - ReadWriteMany
+            resources:
+              requests:
+                storage: 250Gi
+            storageClassName: nfs-client
+    
+    - name: Create PVC for MariaDB data
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: nextcloud-db-pvc
+            namespace: home-assistant
+          spec:
+            accessModes:
+              - ReadWriteMany
+            resources:
+              requests:
+                storage: 10Gi
+            storageClassName: nfs-client
+
+    - name: Template Nextcloud Helm values.yaml
+      template:
+        src: nextcloud-values.yaml.j2
+        dest: /tmp/nextcloud-values.yaml
+
+    - name: Add nextcloud chart repo.
+      kubernetes.core.helm_repository:
+        name: nextcloud
+        repo_url: "https://nextcloud.github.io/helm/"
+
+    - name: Install Nextcloud via Helm
+      kubernetes.core.helm:
+        name: nextcloud
+        release_namespace: nextcloud
+        chart_ref: nextcloud/nextcloud
+        values_files:
+          - /tmp/nextcloud-values.yaml
+        create_namespace: false

@@ -4,6 +4,7 @@
   become: true
   vars:
     ansible_files_path: "~/source/ansible-files"
+    minecraft_world_url: https://cvws.icloud-content.com/B/AYb3oKHoXOPSV8k-sjUQuHq89ZNgAStOzD2E8YWZodB8gnhKGETjLnFP/minecraft_backup_20250405T192314.tar.gz?o=Ag0CrZLXKVZynixUoEsjJ4cirW-TTQvZTGwhGAKRhWNF&v=1&x=3&a=CAogf724Sp6OPTYaYlZ2fOy15gDcymmdcgNKhb6-jVNERQkSbRCeloDr4DIYnvPb7OAyIgEAUgS89ZNgWgTjLnFPaiYdFsUZJCEcjIoO5yP7KQlzPJng1kPKw31yb0gZLWlGodT98gAGw3ImNFRn5x88xd7jwaWs5Icy3dtOX_tYHUmGt89uUb6KDnzFlV1MaOU&e=1743984720&fl=&r=ec70d294-3a17-4c92-b485-debea8a82491-1&k=Jaoswx8rnAE_NCRkJhbuew&ckc=com.apple.clouddocs&ckz=com.apple.CloudDocs&p=155&s=rhb7C5-jy08kPVKLcs3WBa06e64&+=d9cc25e8-2148-42e1-813c-9104978423ce
   vars_files:
     - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
@@ -25,7 +26,6 @@
         name: itzg
         repo_url: "https://itzg.github.io/minecraft-server-charts/"
 
-    # TODO: Enable backups and clone them to cloud storage
     - name: Deploy Minecraft Helm chart.
       kubernetes.core.helm:
         name: minecraft
@@ -45,6 +45,7 @@
             motd: "Welcome to Minecraft deployed via Helm and Ansible!"
             serviceType: NodePort
             nodePort: 31234
+            downloadWorldUrl: "{{ minecraft_world_url }}"
             rcon:
               enabled: true
               password: "{{ minecraft_rcon_password }}"
