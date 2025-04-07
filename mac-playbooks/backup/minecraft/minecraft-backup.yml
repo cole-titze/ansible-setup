@@ -57,6 +57,12 @@
         src: "{{ backup_dir }}/{{ archive_name }}"
         dest: "{{ ansible_files_path }}/backups/minecraft/{{ archive_name }}"
         flat: yes
+  
+    - name: Fetch the backup archive to the local machine's generic name
+      fetch:
+        src: "{{ backup_dir }}/{{ archive_name }}"
+        dest: "{{ ansible_files_path }}/backups/minecraft/minecraft_backup_latest.tar.gz"
+        flat: yes
     
     - name: Clean up remote backup directory
       file:
