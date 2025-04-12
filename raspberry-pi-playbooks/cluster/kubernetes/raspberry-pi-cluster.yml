@@ -145,10 +145,6 @@
   import_playbook: folding-at-home/folding-at-home.yml
   tags: ['folding-at-home']
 
-- name: Set up monero miner.
-  import_playbook: monero-miner/monero-miner.yml
-  tags: ['monero-miner']
-
 - name: Set up esphome.
   import_playbook: esphome/esphome.yml
   tags: ['esphome']
@@ -164,6 +160,10 @@
 - name: Set up Dashboard.
   import_playbook: dashboard/dashboard.yml
   tags: ['dashboard']
+
+# - name: Set up monero miner.
+#   import_playbook: monero-miner/monero-miner.yml
+#   tags: ['monero-miner']
 
 # Don't have a need for nextcloud yet
 # - name: Set up nextcloud
