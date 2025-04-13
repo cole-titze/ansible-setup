@@ -1,6 +1,6 @@
 ---
 - name: Setup Raspberry Pi
-  hosts: raspberrypis
+  hosts: wakeonlanserver
   become: true
   roles:
     - wol
