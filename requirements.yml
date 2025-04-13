@@ -15,3 +15,9 @@
   scm: git
   version: main
   name: nfs
+
+  # wol role
+- src: git@github.com:cole-titze/ansible-role-wol-server.git
+  scm: git
+  version: main
+  name: wol
