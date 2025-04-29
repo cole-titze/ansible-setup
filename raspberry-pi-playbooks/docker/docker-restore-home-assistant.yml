@@ -2,20 +2,23 @@
 - name: Setup Docker
   hosts: docker
   become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+
   tasks:
     - name: Pause Home Assistant container
       community.docker.docker_container:
         name: home-assistant
         state: stopped
 
-    - name: Remove /var/homeassistant directory
+    - name: Remove home assistant backup directory
       file:
-        path: /var/homeassistant
+        path: "/home/{{ ansible_user }}/backups/homeassistant"
         state: absent
-
-    - name: Ensure /var/homeassistant directory exists
+  
+    - name: Ensure home assistant backup directory exists
       ansible.builtin.file:
-        path: /var/homeassistant
+        path: "/home/{{ ansible_user }}/backups/homeassistant"
         state: directory
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
@@ -38,6 +41,19 @@
         patterns: "*"
       register: backup_files
 
+    - name: Remove /var/homeassistant directory
+      file:
+        path: /var/homeassistant
+        state: absent
+
+    - name: Ensure /var/homeassistant directory exists
+      ansible.builtin.file:
+        path: /var/homeassistant
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+
     - name: Extract the latest Home Assistant backup into /var/homeassistant
       ansible.builtin.shell: |
         latest_backup=$(ls -Art "/home/{{ ansible_user }}/backups/homeassistant" | tail -n 1)
@@ -53,3 +69,11 @@
         name: home-assistant
         state: started
         restart: true
+
+    - name: Show commands to reset Home Assistant auth
+      debug:
+        msg: |
+          cd .storage/
+          mv auth auth.bak 2>/dev/null
+          mv auth_provider.homeassistant auth_provider.homeassistant.bak 2>/dev/null
+          mv onboarding onboarding.bak 2>/dev/null
