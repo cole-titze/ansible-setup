@@ -54,10 +54,11 @@
         group: "{{ ansible_user }}"
         mode: '0755'
 
-    - name: Extract the latest Home Assistant backup into /var/homeassistant
+    - name: Extract latest Home Assistant backup directly to /var/homeassistant
       ansible.builtin.shell: |
-        latest_backup=$(ls -Art "/home/{{ ansible_user }}/backups/homeassistant" | tail -n 1)
-        tar -xOf "/home/{{ ansible_user }}/backups/homeassistant/$latest_backup" "./homeassistant.tar.gz" | tar --strip-components=1 -zxf - -C /var/homeassistant
+        set -e
+        latest_backup=$(ls -Art "/home/pi/backups/homeassistant"/*.tar | tail -n 1)
+        tar -xOf "$latest_backup" "homeassistant.tar.gz" | tar --strip-components=1 -zxf - -C /var/homeassistant
       args:
         executable: /bin/bash
       when: 
@@ -70,7 +71,7 @@
         state: started
         restart: true
 
-    - name: Show commands to reset Home Assistant auth
+    - name: If login fails use commands to reset Home Assistant auth
       debug:
         msg: |
           cd .storage/
