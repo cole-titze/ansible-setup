@@ -1,6 +1,6 @@
 ---
 - name: Get CPU Temperature from Nodes
-  hosts: cluster
+  hosts: raspberrypis
   gather_facts: false
   tasks:
     - name: Read CPU temperature
