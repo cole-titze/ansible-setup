@@ -1,11 +1,13 @@
 ---
 - name: Configure macbook backup
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
   vars:
-    src_dirs:
-      - "{{ lookup('env', 'HOME') }}/.ssh"
-      - "{{ lookup('env', 'HOME') }}/.kube"
+    src_map:
+      - src: "{{ lookup('env', 'HOME') }}/.ssh"
+        dest: "ssh"
+      - src: "{{ lookup('env', 'HOME') }}/.kube"
+        dest: "kube"
     icloud_base_dir: "{{ lookup('env', 'HOME') }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
     timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
     icloud_backup_dir: "{{ icloud_base_dir }}/backup_{{ timestamp }}"
@@ -17,14 +19,37 @@
         state: directory
         mode: "0755"
 
-    - name: Copy macOS folders to iCloud backup
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "{{ icloud_backup_dir }}/"
-        remote_src: false
-      with_items: "{{ src_dirs }}"
-      ignore_errors: true
+    - name: Sync macOS folders to iCloud backup with renamed dirs
+      ansible.posix.synchronize:
+        src: "{{ item.src }}/"
+        dest: "{{ icloud_backup_dir }}/{{ item.dest }}/"
+        archive: true
+        recursive: true
+      loop: "{{ src_map }}"
 
     - name: Print backup location
       ansible.builtin.debug:
-        msg: "Backup completed! Encrypted file saved as: {{ icloud_backup_dir }}"
+        msg: "Backup completed! File saved as: {{ icloud_backup_dir }}"
+
+    - name: Find all backup directories
+      ansible.builtin.find:
+        paths: "{{ icloud_base_dir }}"
+        patterns: "backup_*"
+        file_type: directory
+      register: found_backups
+
+    - name: Sort backups by modification time (newest first)
+      ansible.builtin.set_fact:
+        sorted_backups: "{{ found_backups.files | sort(attribute='mtime', reverse=true) }}"
+
+    - name: Filter backups older than 30 days, excluding the most recent
+      ansible.builtin.set_fact:
+        deletable_backups: >-
+          {{ sorted_backups[1:] | selectattr('mtime', 'lt', (ansible_date_time.epoch | int) - 2592000) | list }}
+
+    - name: Remove old backup directories (but always keep most recent)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ deletable_backups }}"
+      when: deletable_backups | length > 0

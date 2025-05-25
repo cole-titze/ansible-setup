@@ -1,11 +1,11 @@
 ---
-- name: Backup home assistant.
-  import_playbook: home-assistant/home-assistant-backup.yml
-  tags: ['home-assistant']
-
 - name: Backup macbook.
   import_playbook: macbook/macbook-backup.yml
   tags: ['macbook']
+
+- name: Backup home assistant.
+  import_playbook: home-assistant/home-assistant-backup.yml
+  tags: ['home-assistant']
 
 - name: Backup minecraft.
   import_playbook: minecraft/minecraft-backup.yml
