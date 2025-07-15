@@ -1,0 +1,23 @@
+---
+- name: Configure Traefik
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create traefik namespace
+      k8s:
+        name: traefik
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Deploy Traefik Deployment + Service
+      k8s:
+        definition: "{{ lookup('template', 'traefik-template.yml') }}"
+        state: present

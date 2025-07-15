@@ -133,6 +133,10 @@
   import_playbook: nfs/nfs.yml
   tags: ['nfs']
 
+- name: Set up traefik.
+  import_playbook: traefik/traefik.yml
+  tags: ['traefik']
+
 - name: Set up minecraft
   import_playbook: minecraft/minecraft.yml
   tags: ['minecraft']
