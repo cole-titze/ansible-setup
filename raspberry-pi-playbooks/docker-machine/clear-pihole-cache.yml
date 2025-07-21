@@ -1,0 +1,20 @@
+---
+- name: Clear Pi-hole DNS cache
+  hosts: docker
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Flush Pi-hole DNS cache
+      become: true
+      ansible.builtin.command: pihole reloaddns
+      register: pihole_flush_result
+
+    - name: Flush and reload Pi-hole lists
+      ansible.builtin.command: pihole reloadlists
+      register: pihole_reload_result
+
+    - name: Restart Unbound for DNS cache flush
+      ansible.builtin.service:
+        name: unbound
+        state: restarted

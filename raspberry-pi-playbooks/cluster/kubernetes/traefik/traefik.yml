@@ -5,19 +5,72 @@
   become: true
 
   environment:
-    # The location of the kubeconfig file on the master.
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     PATH: "~/go/bin:{{ ansible_env.PATH }}"
 
+  vars:
+    tls_dir: /etc/ssl/kubecluster-tls
+
   tasks:
+    - name: Ensure directory exists on remote for TLS files
+      ansible.builtin.file:
+        path: "{{ tls_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Generate private key
+      community.crypto.openssl_privatekey:
+        path: "{{ tls_dir }}/kubecluster.key"
+        size: 2048
+
+    - name: Generate CSR
+      community.crypto.openssl_csr:
+        path: "{{ tls_dir }}/kubecluster.csr"
+        privatekey_path: "{{ tls_dir }}/kubecluster.key"
+        common_name: kubecluster
+        subject_alt_name:
+          - DNS:*.kubecluster
+
+    - name: Generate self-signed cert
+      community.crypto.x509_certificate:
+        path: "{{ tls_dir }}/kubecluster.crt"
+        privatekey_path: "{{ tls_dir }}/kubecluster.key"
+        csr_path: "{{ tls_dir }}/kubecluster.csr"
+        provider: selfsigned
+        selfsigned_not_after: "+365d"
+
+    - name: Read generated certificate
+      ansible.builtin.slurp:
+        src: "{{ tls_dir }}/kubecluster.crt"
+      register: kube_cert
+
+    - name: Read generated private key
+      ansible.builtin.slurp:
+        src: "{{ tls_dir }}/kubecluster.key"
+      register: kube_key
+
     - name: Create traefik namespace
-      k8s:
+      kubernetes.core.k8s:
         name: traefik
         api_version: v1
         kind: Namespace
         state: present
 
-    - name: Deploy Traefik Deployment + Service
-      k8s:
+    - name: Create TLS secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: local-cert
+            namespace: traefik
+          type: kubernetes.io/tls
+          data:
+            tls.crt: "{{ kube_cert['content'] }}"
+            tls.key: "{{ kube_key['content'] }}"
+
+    - name: Deploy Traefik
+      kubernetes.core.k8s:
         definition: "{{ lookup('template', 'traefik-template.yml') }}"
         state: present

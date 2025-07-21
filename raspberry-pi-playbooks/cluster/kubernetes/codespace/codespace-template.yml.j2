@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  namespace: codespace
+  name: code-space-secret
+type: Opaque
+stringData:
+  password: "{{ code_space_password }}"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: code-space-pvc
+  namespace: codespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: code-space
+  namespace: codespace
+spec:
+  selector:
+    app: code-space
+  ports:
+    - protocol: TCP
+      port: 8090
+      targetPort: 8090
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-space
+  namespace: codespace
+  labels:
+    app: code-space
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-space
+  template:
+    metadata:
+      labels:
+        app: code-space
+    spec:
+      containers:
+        - name: code-space
+          image: ghcr.io/cole-titze/containers/code-space:latest
+          ports:
+            - containerPort: 8090
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: code-space-secret
+                  key: password
+          volumeMounts:
+            - name: code-space-storage
+              mountPath: /home/coder/source
+      volumes:
+        - name: code-space-storage
+          persistentVolumeClaim:
+            claimName: code-space-pvc
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: code-space
+  namespace: codespace
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  rules:
+    - host: code.kubecluster
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: code-space
+                port:
+                  number: 8090
+  tls:
+    - hosts:
+        - code.kubecluster

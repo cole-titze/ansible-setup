@@ -1,10 +1,10 @@
+---
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: traefik
   namespace: traefik
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: traefik
@@ -19,12 +19,28 @@ spec:
           args:
             - "--api.dashboard=true"
             - "--providers.kubernetesIngress=true"
+            - "--providers.file.directory=/certs"
             - "--entrypoints.web.address=:80"
+            - "--entrypoints.websecure.address=:443"
+            - "--entrypoints.websecure.http.tls=true"
           ports:
             - name: web
               containerPort: 80
+              hostPort: 80
+            - name: websecure
+              containerPort: 443
+              hostPort: 443
             - name: admin
               containerPort: 8080
+              hostPort: 8080
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: code-local-cert
 ---
 apiVersion: v1
 kind: Service
@@ -39,8 +55,9 @@ spec:
     - name: web
       port: 80
       targetPort: 80
-      nodePort: 30080
+    - name: websecure
+      port: 443
+      targetPort: 443
     - name: admin
       port: 8080
       targetPort: 8080
-      nodePort: 30081

@@ -137,9 +137,9 @@
   import_playbook: traefik/traefik.yml
   tags: ['traefik']
 
-- name: Set up minecraft
-  import_playbook: minecraft/minecraft.yml
-  tags: ['minecraft']
+- name: Set up codespace.
+  import_playbook: codespace/codespace.yml
+  tags: ['codespace']
 
 - name: Set up magic mirror.
   import_playbook: magic-mirror/magic-mirror.yml
@@ -165,6 +165,10 @@
   import_playbook: dashboard/dashboard.yml
   tags: ['dashboard']
 
+# - name: Set up minecraft
+#   import_playbook: minecraft/minecraft.yml
+#   tags: ['minecraft']
+
 # - name: Set up monero miner.
 #   import_playbook: monero-miner/monero-miner.yml
 #   tags: ['monero-miner']
@@ -174,7 +178,7 @@
 #   import_playbook: nextcloud/nextcloud.yml
 #   tags: ['nextcloud']
 
-# Pihole is currently running in docker today
+# Pihole is currently running on separate machine today.
 # - name: Set up pi hole.
 #   import_playbook: pi-hole/pi-hole.yml
 #   tags: ['pi-hole']

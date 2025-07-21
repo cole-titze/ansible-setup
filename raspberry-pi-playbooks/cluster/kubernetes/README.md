@@ -1,2 +1,2 @@
 # Port Mapping
-+ Traefik: 80 -> 30080
++ Traefik: 80 -> 30080, 443 -> 30443
