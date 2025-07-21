@@ -26,20 +26,33 @@
         release_namespace: kubernetes-dashboard
         create_namespace: true
 
-    - name: Update Kubernetes Dashboard service to NodePort
+    - name: Expose Kubernetes Dashboard via Traefik Ingress
       kubernetes.core.k8s:
-        state: patched
-        kind: Service
-        namespace: kubernetes-dashboard
-        name: kubernetes-dashboard-kong-proxy
+        state: present
         definition:
+          apiVersion: networking.k8s.io/v1
+          kind: Ingress
+          metadata:
+            name: kubernetes-dashboard
+            namespace: kubernetes-dashboard
+            annotations:
+              traefik.ingress.kubernetes.io/router.entrypoints: websecure
+              traefik.ingress.kubernetes.io/router.tls: "true"
           spec:
-            type: NodePort
-            ports:
-              - port: 443
-                targetPort: 8443
-                protocol: TCP
-                nodePort: 30083
+            rules:
+              - host: dashboard.kubecluster
+                http:
+                  paths:
+                    - path: /
+                      pathType: Prefix
+                      backend:
+                        service:
+                          name: kubernetes-dashboard-kong-proxy
+                          port:
+                            number: 443
+            tls:
+              - hosts:
+                  - dashboard.kubecluster
 
     - name: Create the Service Account for Kubernetes Dashboard
       kubernetes.core.k8s:

@@ -20,8 +20,21 @@
         api_version: v1
         kind: Namespace
         state: present
+    
+    - name: Create codespace secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            namespace: codespace
+            name: code-space-secret
+          type: Opaque
+          stringData:
+            password: "{{ code_space_password }}"
 
     - name: Deploy Codespace Deployment + Service
       k8s:
-        definition: "{{ lookup('template', 'codespace-template.yml.j2') }}"
+        definition: "{{ lookup('template', 'codespace-template.yml') }}"
         state: present
