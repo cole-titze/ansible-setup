@@ -1,6 +1,6 @@
 ---
-kind: Deployment
 apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: magic-mirror
   namespace: magic-mirror
@@ -36,17 +36,34 @@ spec:
               memory: "256Mi"
 
 ---
-kind: Service
 apiVersion: v1
+kind: Service
 metadata:
   name: magic-mirror
   namespace: magic-mirror
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
     - port: 8082
       targetPort: 8082
       protocol: TCP
-      nodePort: 30082
   selector:
     app: magic-mirror
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: magic-mirror
+  namespace: magic-mirror
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`mirror.kubecluster`)
+      kind: Rule
+      services:
+        - name: magic-mirror
+          port: 8082
+  tls:
+    certResolver: default
