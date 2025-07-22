@@ -47,6 +47,7 @@ spec:
       initContainers:
         - name: init-copy-source
           image: ghcr.io/cole-titze/containers/code-space:latest
+          imagePullPolicy: Always
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -59,6 +60,7 @@ spec:
       containers:
         - name: code-space
           image: ghcr.io/cole-titze/containers/code-space:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8090
           env:
