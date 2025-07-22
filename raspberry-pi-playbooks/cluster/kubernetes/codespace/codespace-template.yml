@@ -43,6 +43,19 @@ spec:
       labels:
         app: code-space
     spec:
+      # Use an init container to copy source files if the directory is empty
+      initContainers:
+        - name: init-copy-source
+          image: ghcr.io/cole-titze/containers/code-space:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              if [ -z "$(ls -A /mnt/source)" ]; then
+                cp -r /home/coder/source/. /mnt/source;
+              fi
+          volumeMounts:
+            - name: code-space-storage
+              mountPath: /mnt/source
       containers:
         - name: code-space
           image: ghcr.io/cole-titze/containers/code-space:latest
