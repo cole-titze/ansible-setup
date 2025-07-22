@@ -34,6 +34,7 @@ spec:
         - name: esphome-storage
           persistentVolumeClaim:
             claimName: esphome-pvc
+
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -47,24 +48,41 @@ spec:
     requests:
       storage: 10Gi
   storageClassName: nfs-client
+
 ---
-kind: Service
 apiVersion: v1
+kind: Service
 metadata:
   name: esphome
   namespace: home-assistant
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
     - name: web
       port: 6052
       targetPort: 6052
       protocol: TCP
-      nodePort: 30090
     - name: api
       port: 6123
       targetPort: 6123
       protocol: TCP
-      nodePort: 30091
   selector:
     app: esphome
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: esphome
+  namespace: home-assistant
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`esphome.kubecluster`)
+      kind: Rule
+      services:
+        - name: esphome
+          port: 6052
+  tls:
+    certResolver: default
