@@ -161,17 +161,20 @@
   import_playbook: prometheus/prometheus.yml
   tags: ['prometheus']
 
-- name: Set up Dashboard.
-  import_playbook: dashboard/dashboard.yml
-  tags: ['dashboard']
-
+# Needs work to get the backup on initialization.
 # - name: Set up minecraft
 #   import_playbook: minecraft/minecraft.yml
 #   tags: ['minecraft']
 
+# Not needed, just a fun test
 # - name: Set up monero miner.
 #   import_playbook: monero-miner/monero-miner.yml
 #   tags: ['monero-miner']
+
+# Not needed with prometheus/grafana
+# - name: Set up Dashboard.
+#   import_playbook: dashboard/dashboard.yml
+#   tags: ['dashboard']
 
 # Don't have a need for nextcloud yet
 # - name: Set up nextcloud

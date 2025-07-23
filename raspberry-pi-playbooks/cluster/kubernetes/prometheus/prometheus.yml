@@ -27,7 +27,33 @@
         values:
           alertmanager:
             enabled: false
+
           grafana:
             service:
-              type: NodePort
-              nodePort: 31000
+              type: ClusterIP
+            ingress:
+              enabled: true
+              ingressClassName: traefik
+              annotations:
+                traefik.ingress.kubernetes.io/router.entrypoints: websecure
+                traefik.ingress.kubernetes.io/router.tls.certresolver: default
+              host: grafana.kubecluster
+              path: /
+              tls:
+                - hosts:
+                    - grafana.kubecluster
+
+          prometheus:
+            service:
+              type: ClusterIP
+            ingress:
+              enabled: true
+              ingressClassName: traefik
+              annotations:
+                traefik.ingress.kubernetes.io/router.entrypoints: websecure
+                traefik.ingress.kubernetes.io/router.tls.certresolver: default
+              host: prometheus.kubecluster
+              path: /
+              tls:
+                - hosts:
+                    - prometheus.kubecluster
