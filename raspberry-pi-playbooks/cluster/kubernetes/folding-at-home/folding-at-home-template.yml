@@ -18,6 +18,7 @@ spec:
       containers:
         - name: fah
           image: lscr.io/linuxserver/foldingathome:latest
+          imagePullPolicy: Always
           env:
             - name: PUID
               value: "1000"

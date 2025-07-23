@@ -43,6 +43,7 @@
                 containers:
                   - name: xmrig-miner
                     image: ghcr.io/cole-titze/containers/monero-miner:latest
+                    imagePullPolicy: Always
                     env:
                       - name: WALLET_ADDRESS
                         value: "{{ monero_wallet_address }}"

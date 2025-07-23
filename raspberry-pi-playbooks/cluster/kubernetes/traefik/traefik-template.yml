@@ -16,6 +16,7 @@ spec:
       containers:
         - name: traefik
           image: traefik:v3.0
+          imagePullPolicy: Always
           args:
             - "--api.dashboard=true"
             - "--providers.kubernetesIngress=true"

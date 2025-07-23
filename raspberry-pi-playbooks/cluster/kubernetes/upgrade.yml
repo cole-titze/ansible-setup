@@ -1,9 +1,10 @@
 ---
-- name: Upgrade everything on the cluster.
+- name: Upgrade software on the cluster.
   hosts: cluster
   become: true
 
   tasks:
+    # Update non-kubernetes software
     - name: Upgrade all software.
       ansible.builtin.apt:
         update_cache: true
@@ -22,3 +23,111 @@
     - name: Remove dependencies that are no longer required.
       apt:
         autoremove: true
+
+    - name: Upgrade kube libraries.
+      ansible.builtin.package:
+        name:
+          - python3-pip
+          - python3-setuptools
+          - python3-openshift
+          - python3-yaml
+          - build-essential
+          - golang
+          - git
+        state: latest
+
+- name: Upgrade pods on the cluster.
+  hosts: control_plane
+  become: true
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    # Upgrade kube pip libraries.
+    - name: Upgrade kube pip libraries.
+      ansible.builtin.pip:
+        name:
+          - kubernetes
+          - openshift
+        state: latest
+    
+    # Upgrade helm diff
+    - name: Check if Helm diff plugin is already installed
+      ansible.builtin.command: helm plugin list
+      register: helm_plugin_list
+      changed_when: false
+      failed_when: false
+
+    - name: Install Helm diff plugin if not present
+      ansible.builtin.command: >
+        helm plugin install https://github.com/databus23/helm-diff
+      when: "'diff' not in helm_plugin_list.stdout"
+
+    - name: Update Helm diff plugin if already installed
+      ansible.builtin.command: helm plugin update diff
+      when: "'diff' in helm_plugin_list.stdout"
+
+    - name: Show final installed Helm plugins
+      ansible.builtin.command: helm plugin list
+      register: final_plugins
+      changed_when: false
+
+    - name: Display installed plugins
+      ansible.builtin.debug:
+        var: final_plugins.stdout_lines
+
+    # Update helm pods
+
+
+    # Update all Kubernetes deployments (containers)
+    - name: Get all namespaces
+      kubernetes.core.k8s_info:
+        kind: Namespace
+      register: namespaces
+
+    - name: Get all deployments in each namespace
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ item.metadata.name }}"
+      loop: "{{ namespaces.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+      register: all_deployments
+
+    - name: Flatten all deployments with namespace info
+      set_fact:
+        deployments_all_namespaces: >-
+          {{
+            deployments_all_namespaces | default([]) +
+            (item.resources | default([]) | map('combine', {'_namespace': item.item.metadata.name}) | list)
+          }}
+      loop: "{{ all_deployments.results }}"
+
+    - name: Restart all deployments
+      kubernetes.core.k8s:
+        kind: Deployment
+        name: "{{ item.metadata.name }}"
+        namespace: "{{ item._namespace }}"
+        definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/restartedAt: "{{ ansible_date_time.iso8601 }}"
+        merge_type:
+          - strategic-merge
+          - merge
+      loop: "{{ deployments_all_namespaces }}"
+      loop_control:
+        label: "{{ item._namespace }}/{{ item.metadata.name }}"
+
+    - name: Show commands to update Python Kubernetes client and Ansible collection
+      ansible.builtin.debug:
+        msg: |
+          To update your local environment, run the following commands:
+
+          # Upgrade Ansible Kubernetes collection
+          ansible-galaxy collection install kubernetes.core --upgrade

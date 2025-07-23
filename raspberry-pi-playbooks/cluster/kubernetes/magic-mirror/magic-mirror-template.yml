@@ -17,6 +17,7 @@ spec:
       containers:
         - name: magic-mirror
           image: ghcr.io/cole-titze/containers/magic-mirror:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8082
           livenessProbe:
