@@ -21,13 +21,15 @@
         name: bitnami
         repo_url: "https://charts.bitnami.com/bitnami"
 
-    - name: Update Helm Repositories
+    - name: Deploy Metrics Server using Helm
       kubernetes.core.helm:
         name: metrics-server
         chart_ref: bitnami/metrics-server
         release_namespace: metric-server
         create_namespace: true
         values:
+          image:
+            pullPolicy: Always
           resources:
             requests:
               cpu: "100m"

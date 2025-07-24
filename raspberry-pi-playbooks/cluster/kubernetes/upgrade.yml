@@ -80,9 +80,36 @@
         var: final_plugins.stdout_lines
 
     # Update helm pods
-
-
-    # Update all Kubernetes deployments (containers)
+    - name: Force rollout of metrics-server by updating annotation
+      kubernetes.core.k8s:
+        state: present
+        merge_type: strategic-merge
+        resource_definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: metrics-server
+            namespace: metric-server
+          spec:
+            template:
+              metadata:
+                annotations:
+                  rollout-trigger: "{{ ansible_date_time.iso8601 }}"
+    
+    - name: Force Grafana rollout by adding annotation
+      kubernetes.core.k8s:
+        kind: Deployment
+        api_version: apps/v1
+        name: cluster-monitoring-grafana
+        namespace: default
+        merge_type: strategic-merge
+        resource_definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  rollout-trigger: "{{ ansible_date_time.iso8601 }}"
+    
     - name: Get all namespaces
       kubernetes.core.k8s_info:
         kind: Namespace
