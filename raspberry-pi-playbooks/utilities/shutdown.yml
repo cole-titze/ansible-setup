@@ -1,23 +1,22 @@
 ---
-- name: Shutdown nodes.
-  hosts: nodes
-  become: true
+# - name: Shutdown nodes.
+#   hosts: nodes
+#   become: true
 
-  tasks:
-    - name: Shut down the system
-      community.general.shutdown:
+#   tasks:
+#     - name: Shut down the system
+#       community.general.shutdown:
 
-- name: Shutdown control plane.
-  hosts: control_plane
-  become: true
+# - name: Shutdown control plane.
+#   hosts: control_plane
+#   become: true
 
-  tasks:
-    - name: Shut down the system
-      community.general.shutdown:
-        delay: 15  # Wait 15 seconds before shutting down
-        msg: "System is shutting down via Ansible!"
+#   tasks:
+#     - name: Shut down the system
+#       community.general.shutdown:
+#         delay: 15  # Wait 15 seconds before shutting down
+#         msg: "System is shutting down via Ansible!"
 
----
 - name: Shutdown pikvm node.
   hosts: pikvms
   become: true
@@ -28,13 +27,12 @@
         delay: 15  # Wait 15 seconds before shutting down
         msg: "System is shutting down via Ansible!"
 
----
-- name: Shutdown docker nodes.
-  hosts: docker
-  become: true
+# - name: Shutdown docker nodes.
+#   hosts: docker
+#   become: true
 
-  tasks:
-    - name: Shut down the system
-      community.general.shutdown:
-        delay: 15  # Wait 15 seconds before shutting down
-        msg: "System is shutting down via Ansible!"
+#   tasks:
+#     - name: Shut down the system
+#       community.general.shutdown:
+#         delay: 15  # Wait 15 seconds before shutting down
+#         msg: "System is shutting down via Ansible!"

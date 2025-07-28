@@ -1,0 +1,54 @@
+---
+- name: Clear Kubernetes Resources
+  hosts: nodes
+  become: true
+  
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Run k3s-agent-uninstall.sh to remove k3s agent
+      ansible.builtin.shell: /usr/local/bin/k3s-agent-uninstall.sh
+
+    - name: Remove leftover k3s agent directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/rancher
+        - /var/lib/rancher
+        - /var/lib/kubelet
+        - /etc/systemd/system/k3s-agent.service
+        - /var/lib/cni
+        - /run/flannel
+
+
+- name: Clear Kubernetes Resources
+  hosts: control_plane
+  become: true
+  tasks:
+    - name: Run k3s-uninstall.sh to remove k3s server
+      ansible.builtin.shell: /usr/local/bin/k3s-uninstall.sh
+
+    - name: Remove leftover k3s directories (just in case)
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/rancher
+        - /var/lib/rancher
+        - /var/lib/kubelet
+        - /etc/systemd/system/k3s.service
+        - /var/lib/cni
+        - /run/flannel
+
+- name: Restart cluster
+  hosts: cluster
+  become: true
+  tasks:
+    - name: Reboot the system after uninstall
+      become: true
+      reboot:
+        reboot_timeout: 600
