@@ -1,4 +1,4 @@
 ---
 # Cluster storage options.
-storage_nfs_dir: "storage"  # Use this for 'filesystem'
-storage_nfs_share_name: kube_nfs
+# storage_nfs_dir: "storage"  # Use this for 'filesystem'
+storage_nfs_share_name: longhorn

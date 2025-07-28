@@ -26,9 +26,16 @@
       loop: "{{ all_sa_facts.resources }}"
       when: all_sa_facts.resources | length > 0
 
-    - name: Delete all resources in all namespaces
-      command: >
-        kubectl delete --all pods,deployments,services,daemonsets,statefulsets,replicasets,ingresses,jobs,cronjobs,configmaps,secrets,pvc --force --grace-period=0 --all-namespaces
+    - name: Get list of namespaces
+      command: kubectl get ns -o jsonpath='{.items[*].metadata.name}'
+      register: namespace_list
+
+    - name: Delete all workload resources in each namespace
+      shell: >
+        kubectl delete pods,deployments,services,daemonsets,statefulsets,replicasets,ingresses,jobs,cronjobs,configmaps,secrets,pvc
+        --all
+        --grace-period=0 --force --wait=false --namespace={{ item }}
+      loop: "{{ namespace_list.stdout.split() }}"
       ignore_errors: true
 
     - name: Restart K3s service

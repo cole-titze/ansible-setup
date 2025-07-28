@@ -1,0 +1,13 @@
+- name: Ensure Longhorn data dir exists
+  ansible.builtin.file:
+    path: /var/lib/longhorn
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure iSCSI tools are installed (Longhorn requirement)
+  ansible.builtin.apt:
+    name: open-iscsi
+    state: present
+    update_cache: true

@@ -32,23 +32,16 @@
         state: present
 
 
-- name: Configure storage node.
-  hosts: storage
+- name: Configure storage.
+  hosts: cluster
   gather_facts: false
   become: true
-
-  handlers:
-    - name: restart nfs
-      ansible.builtin.service:
-        name: nfs-server
-        state: restarted
-  
   vars_files:
     - ../storage/config.yml
 
   tasks:
     - name: Set up storage.
-      include_tasks: ../storage/filesystem.yml
+      include_tasks: ../storage/longhorn.yml
 
 
 - name: Configure the control plane.
@@ -129,9 +122,14 @@
   import_playbook: helm/helm.yml
   tags: ['helm']
 
-- name: Set up NFS PVCs.
-  import_playbook: nfs/nfs.yml
-  tags: ['nfs']
+- name: Set up Longhorn PVCs.
+  import_playbook: longhorn/longhorn.yml
+  tags: ['longhorn']
+
+# Currently using longhorn so not needed
+# - name: Set up NFS Subdir External Provisioner.
+#   import_playbook: nfs/nfs.yml
+#   tags: ['nfs']
 
 - name: Set up traefik.
   import_playbook: traefik/traefik.yml
