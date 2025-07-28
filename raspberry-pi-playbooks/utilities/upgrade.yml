@@ -42,6 +42,7 @@
 
   environment:
     # The location of the kubeconfig file on the master.
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     PATH: "~/go/bin:{{ ansible_env.PATH }}"
 
@@ -80,6 +81,27 @@
         var: final_plugins.stdout_lines
 
     # Update helm pods
+    - name: Upgrade Longhorn helm release
+      ansible.builtin.command: >
+        helm upgrade longhorn longhorn/longhorn --namespace longhorn-system
+      register: longhorn_upgrade
+      changed_when: "'Release \"longhorn\" has been upgraded' in longhorn_upgrade.stdout or
+                     'Release \"longhorn\" has been installed' in longhorn_upgrade.stdout"
+
+    - name: Wait for Longhorn pods rollout to complete
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: longhorn-system
+        label_selectors:
+          - "app=longhorn-manager"
+      register: longhorn_pods
+
+    - name: Wait until all Longhorn pods are ready (simple kubectl)
+      shell: |
+        kubectl wait --for=condition=ready pod -n longhorn-system --all --timeout=300s
+      register: wait_result
+      failed_when: wait_result.rc != 0
+
     - name: Force rollout of metrics-server by updating annotation
       kubernetes.core.k8s:
         state: present
@@ -158,8 +180,6 @@
 
           # Upgrade Ansible Kubernetes collection
           ansible-galaxy collection install kubernetes.core --upgrade
-
-# TODO: Add nfs helm upgrade
 
 - name: Upgrade software on the cluster.
   hosts: pikvms
