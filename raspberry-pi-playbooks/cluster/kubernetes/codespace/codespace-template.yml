@@ -43,6 +43,8 @@ spec:
       labels:
         app: code-space
     spec:
+      securityContext:
+        fsGroup: 1001 
       # Use an init container to copy source files if the directory is empty
       initContainers:
         - name: init-copy-source
@@ -51,7 +53,7 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              if [ -z "$(ls -A /mnt/source)" ]; then
+              if [ ! -f /mnt/source/README.md ]; then
                 cp -r /home/coder/source/. /mnt/source;
               fi
           volumeMounts:
