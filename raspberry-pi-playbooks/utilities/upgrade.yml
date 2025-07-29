@@ -189,16 +189,8 @@
       ansible.builtin.setup:
         filter: ansible_distribution
         gather_subset: min
-
-    - name: Remount root filesystem as read-write (Arch only)
-      ansible.builtin.command: rw
-      when: ansible_distribution == "Archlinux"
     
     - name: Update pikvm software
       ansible.builtin.command: pikvm-update
       register: upgrade_output
       changed_when: "'Your PiKVM is already up-to-date' not in upgrade_output.stdout"
-    
-    - name: Remount root filesystem as read-only (Arch only)
-      ansible.builtin.command: mount -o remount,ro /
-      when: ansible_distribution == "Archlinux"
