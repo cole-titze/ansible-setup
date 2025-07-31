@@ -11,6 +11,7 @@ Full automation isn't worth the time here. The two services that I run on my win
 ```
 ollama pull deepseek-code-v2
 ```
++ Turn on exposing ollama over network in settings of ollama
 + Setup task to always run on boot
 + Task Scheduler -> Create Task
 + Give it a name
@@ -18,6 +19,7 @@ ollama pull deepseek-code-v2
 + Check "Run with highest priveleges"
 + In Triggers tab pick "At startup"
 + Add an action to run ollama (Ex. "C:\Program Files\Ollama\ollama.exe" with args "run deepseek-coder-v2")
++ Go to settings tab and configure to what you want
 
 ## Steam
 + Download steam off the internet
