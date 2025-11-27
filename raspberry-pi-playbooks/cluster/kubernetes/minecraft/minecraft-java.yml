@@ -1,0 +1,60 @@
+---
+- name: Deploy Minecraft Server via Helm (auto-update)
+  hosts: control_plane
+  become: true
+
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Ensure minecraft namespace exists
+      k8s:
+        api_version: v1
+        kind: Namespace
+        name: minecraft
+        state: present
+
+    - name: Add itzg Helm repository
+      kubernetes.core.helm_repository:
+        name: itzg
+        repo_url: "https://itzg.github.io/minecraft-server-charts/"
+
+    - name: Deploy / upgrade Minecraft (auto-update enabled)
+      kubernetes.core.helm:
+        name: minecraft
+        chart_ref: itzg/minecraft
+        chart_version: "4.26.1"
+        release_namespace: minecraft
+        state: latest      # ← enables auto-updates when playbook is re-run
+        values:
+          persistence:
+            dataDir:
+              enabled: true
+              existingClaim: ""     # leave empty, chart creates its own PVC
+              storageClass: longhorn # or local-path, or nfs → depending on your setup
+              size: 10Gi
+
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu: "4000m"
+
+          minecraftServer:
+            memory: "12G"
+            eula: true
+            Difficulty: easy
+            motd: "Welcome to Minecraft deployed via Helm and Ansible!"
+            serviceType: NodePort
+            nodePort: 31234
+
+            downloadWorldUrl: "{{ minecraft_world_url }}"
+
+            rcon:
+              enabled: true
+              password: "{{ minecraft_rcon_password }}"

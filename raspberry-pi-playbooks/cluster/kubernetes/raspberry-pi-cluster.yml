@@ -87,7 +87,7 @@
         path: /usr/lib/python3.11/EXTERNALLY-MANAGED
         state: absent
       become: true
-    
+
     - name: Get the control plane node name
       command: kubectl get nodes -o jsonpath='{.items[0].metadata.name}'
       register: control_node
@@ -160,9 +160,9 @@
   tags: ['prometheus']
 
 # Needs work to get the backup on initialization.
-# - name: Set up minecraft
-#   import_playbook: minecraft/minecraft.yml
-#   tags: ['minecraft']
+- name: Set up minecraft
+  import_playbook: minecraft/minecraft.yml
+  tags: ['minecraft']
 
 # Not needed, just a fun test
 # - name: Set up monero miner.

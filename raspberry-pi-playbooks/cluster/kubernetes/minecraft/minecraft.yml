@@ -1,50 +1,65 @@
 ---
-- name: Install Kubernetes Metrics Server
+- name: Deploy Minecraft Bedrock Server via Helm (auto-update)
   hosts: control_plane
   become: true
+
   vars:
     ansible_files_path: "~/source/ansible-files"
+
   vars_files:
     - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
   environment:
-    # The location of the kubeconfig file on the master.
-    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+    K2S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
   tasks:
-    - name: Create minecraft namespace.
+    - name: Ensure minecraft-bedrock namespace exists
       k8s:
-        name: minecraft
         api_version: v1
         kind: Namespace
+        name: minecraft-bedrock
         state: present
 
-    - name: Add itzg chart repo.
+    - name: Add itzg Helm repository
       kubernetes.core.helm_repository:
         name: itzg
         repo_url: "https://itzg.github.io/minecraft-server-charts/"
 
-    - name: Deploy Minecraft Helm chart.
+    - name: Deploy / upgrade Minecraft Bedrock (auto-update enabled)
       kubernetes.core.helm:
-        name: minecraft
-        chart_ref: itzg/minecraft
-        chart_version: '4.26.1'
-        release_namespace: minecraft
-        state: present
+        name: minecraft-bedrock
+        chart_ref: itzg/minecraft-bedrock
+        chart_version: "1.6.0"     # current chart version as of 2025
+        release_namespace: minecraft-bedrock
+        state: latest
+
         values:
+          persistence:
+            dataDir:
+              enabled: true
+              storageClass: longhorn   # or local-path / nfs
+              size: 100Gi
+
           resources:
             requests:
-              memory: 12Gi
-              cpu: 3000m
-          minecraftServer:
-            memory: 12G
+              memory: "2Gi"
+              cpu: "1000m"
+
+          minecraftBedrockServer:
             eula: true
-            Difficulty: easy
-            motd: "Welcome to Minecraft deployed via Helm and Ansible!"
-            serviceType: NodePort
-            nodePort: 31234
-            downloadWorldUrl: "{{ minecraft_world_url }}"
-            rcon:
-              enabled: true
-              password: "{{ minecraft_rcon_password }}"
+            serverName: "Bedrock on K3s via Helm + Ansible"
+            gamemode: survival
+            difficulty: easy
+            allowCheats: false
+            onlineMode: true
+            maxPlayers: 10
+            viewDistance: 32
+
+            # The Bedrock edition world is in the same PVC
+            levelName: "bedrock_world"
+
+            # Optional: download and restore a Bedrock world
+            downloadWorldUrl: "{{minecraft_world_url | default('') }}"
+
+          service:
+            type: Node
