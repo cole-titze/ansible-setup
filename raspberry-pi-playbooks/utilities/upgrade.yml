@@ -54,22 +54,6 @@
           - kubernetes
           - openshift
         state: latest
-    
-    # Upgrade helm diff
-    - name: Check if Helm diff plugin is already installed
-      ansible.builtin.command: helm plugin list
-      register: helm_plugin_list
-      changed_when: false
-      failed_when: false
-
-    - name: Install Helm diff plugin if not present
-      ansible.builtin.command: >
-        helm plugin install https://github.com/databus23/helm-diff
-      when: "'diff' not in helm_plugin_list.stdout"
-
-    - name: Update Helm diff plugin if already installed
-      ansible.builtin.command: helm plugin update diff
-      when: "'diff' in helm_plugin_list.stdout"
 
     - name: Show final installed Helm plugins
       ansible.builtin.command: helm plugin list

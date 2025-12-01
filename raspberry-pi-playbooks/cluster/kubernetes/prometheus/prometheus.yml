@@ -42,7 +42,8 @@
               annotations:
                 traefik.ingress.kubernetes.io/router.entrypoints: websecure
                 traefik.ingress.kubernetes.io/router.tls.certresolver: default
-              host: grafana.kubecluster
+              hosts: 
+                - grafana.kubecluster
               path: /
               tls:
                 - hosts:
@@ -59,7 +60,8 @@
               annotations:
                 traefik.ingress.kubernetes.io/router.entrypoints: websecure
                 traefik.ingress.kubernetes.io/router.tls.certresolver: default
-              host: prometheus.kubecluster
+              hosts: 
+                - prometheus.kubecluster
               path: /
               tls:
                 - hosts:

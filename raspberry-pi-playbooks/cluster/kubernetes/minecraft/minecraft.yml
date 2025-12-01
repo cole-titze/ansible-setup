@@ -10,7 +10,8 @@
     - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
   environment:
-    K2S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
     - name: Ensure minecraft-bedrock namespace exists
@@ -29,24 +30,25 @@
       kubernetes.core.helm:
         name: minecraft-bedrock
         chart_ref: itzg/minecraft-bedrock
-        chart_version: "1.6.0"     # current chart version as of 2025
         release_namespace: minecraft-bedrock
-        state: latest
+        state: present
 
         values:
           persistence:
             dataDir:
               enabled: true
-              storageClass: longhorn   # or local-path / nfs
+              storageClass: longhorn
               size: 100Gi
 
           resources:
             requests:
-              memory: "2Gi"
-              cpu: "1000m"
+              memory: "12Gi"
+              cpu: "3000m"
 
-          minecraftBedrockServer:
-            eula: true
+          # ---- MINECRAFT SERVER SETTINGS (TOP LEVEL) ----
+          minecraftServer:
+            eula: "TRUE"
+            version: "LATEST"
             serverName: "Bedrock on K3s via Helm + Ansible"
             gamemode: survival
             difficulty: easy
@@ -54,12 +56,12 @@
             onlineMode: true
             maxPlayers: 10
             viewDistance: 32
-
-            # The Bedrock edition world is in the same PVC
             levelName: "bedrock_world"
 
-            # Optional: download and restore a Bedrock world
-            downloadWorldUrl: "{{minecraft_world_url | default('') }}"
+            # Service settings
+            serverPort: 19132
+            nodePort: 32619
+            serviceType: NodePort
 
-          service:
-            type: Node
+            # Only applies if you actually supply a URL
+            downloadWorldUrl: "{{ minecraft_world_url | default('') }}"

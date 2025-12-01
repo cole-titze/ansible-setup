@@ -135,6 +135,10 @@
   import_playbook: traefik/traefik.yml
   tags: ['traefik']
 
+- name: Set up portainer.
+  import_playbook: portainer/portainer.yml
+  tags: ['portainer']
+
 - name: Set up codespace.
   import_playbook: codespace/codespace.yml
   tags: ['codespace']

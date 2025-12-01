@@ -1,0 +1,57 @@
+---
+- name: Configure Code Space
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  vars:
+    portainer_namespace: portainer
+    portainer_hostname: "portainer.kubecluster"
+    portainer_manifest_url: "https://downloads.portainer.io/ce2-21/portainer-agent-k8s-nodeport.yaml"
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  environment:
+    # The location of the kubeconfig file on the master.
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create Portainer namespace
+      kubernetes.core.k8s:
+        state: present
+        kind: Namespace
+        name: "{{ portainer_namespace }}"
+
+    - name: Add portainer-community chart repo
+      kubernetes.core.helm_repository:
+        name: portainer
+        repo_url: "https://portainer.github.io/k8s/"
+        state: present
+      
+    - name: Deploy Portainer via Helm
+      kubernetes.core.helm:
+        name: portainer
+        chart_ref: portainer/portainer
+        release_namespace: portainer
+        create_namespace: true
+        values:
+          service:
+            type: NodePort
+          tls:
+            force: true
+          image:
+            tag: "lts"
+          # ingress:
+          #   enabled: true
+          #   ingressClassName: traefik
+          #   hosts:
+          #     - host: "{{ portainer_hostname }}"
+          #       paths:
+          #         - path: /
+          #   annotations:
+          #     traefik.ingress.kubernetes.io/router.entrypoints: websecure
+          #     traefik.ingress.kubernetes.io/router.rule: Host(`portainer.kubecluster`)
+          #     traefik.ingress.kubernetes.io/router.tls: "true"
+          #     traefik.ingress.kubernetes.io/service.server.scheme: https
+          #     traefik.ingress.kubernetes.io/service.server.port: "9443"
