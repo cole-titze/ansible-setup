@@ -1,0 +1,61 @@
+---
+- name: Configure Minecraft backup
+  hosts: docker
+  gather_facts: false
+  become: true
+  vars:
+    local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/minecraft/bedrock/"
+    remote_path: "/home/{{ ansible_user }}/backups/minecraft/"
+    minecraft_container_name: "minecraft-bedrock"
+    minecraft_world_dir: "/opt/minecraft-bedrock/worlds/Ipad"
+
+  tasks:
+    - name: Ensure local backup dir for Minecraft exists
+      ansible.builtin.file:
+        path: "{{ local_backup_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+    
+    - name: Ensure remote backup directory exists
+      ansible.builtin.file:
+        path: "{{ remote_path }}"
+        state: directory
+        mode: "0755"
+
+    - name: Stop Minecraft container
+      community.docker.docker_container:
+        name: "{{ minecraft_container_name }}"
+        state: stopped
+
+    - name: Create timestamped backup zip (Ipad only)
+      ansible.builtin.command: >
+        zip -r "{{ remote_path }}/minecraft_backup_{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}.zip" "Ipad"
+      args:
+        chdir: "/opt/minecraft-bedrock/worlds"
+
+    - name: Get list of backup files in remote directory
+      ansible.builtin.find:
+        paths: "{{ remote_path }}"
+        file_type: file
+      register: backup_files
+
+    - name: Fetch Minecraft backups
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ local_backup_dir }}"
+        flat: yes
+      loop: "{{ backup_files.files }}"
+
+    - name: Restart Minecraft container
+      community.docker.docker_container:
+        name: "{{ minecraft_container_name }}"
+        state: started
+
+    - name: Delete remote Minecraft backup zips after fetch
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ backup_files.files }}"
+      when: backup_files.matched > 0

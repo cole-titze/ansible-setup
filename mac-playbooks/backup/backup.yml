@@ -1,4 +1,8 @@
 ---
+- name: Backup docker minecraft.
+  import_playbook: minecraft/minecraft-docker-backup.yml
+  tags: ['minecraft']
+
 - name: Backup macbook.
   import_playbook: macbook/macbook-backup.yml
   tags: ['macbook']
@@ -7,7 +11,7 @@
   import_playbook: home-assistant/home-assistant-backup.yml
   tags: ['home-assistant']
 
-# Not using minecraft yet
+# Not using minecraft kubernetes yet
 # - name: Backup minecraft.
 #   import_playbook: minecraft/minecraft-backup.yml
 #   tags: ['minecraft']
