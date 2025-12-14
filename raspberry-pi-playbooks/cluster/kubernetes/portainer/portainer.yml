@@ -37,21 +37,18 @@
         create_namespace: true
         values:
           service:
-            type: NodePort
+            type: ClusterIP
           tls:
             force: true
           image:
             tag: "lts"
-          # ingress:
-          #   enabled: true
-          #   ingressClassName: traefik
-          #   hosts:
-          #     - host: "{{ portainer_hostname }}"
-          #       paths:
-          #         - path: /
-          #   annotations:
-          #     traefik.ingress.kubernetes.io/router.entrypoints: websecure
-          #     traefik.ingress.kubernetes.io/router.rule: Host(`portainer.kubecluster`)
-          #     traefik.ingress.kubernetes.io/router.tls: "true"
-          #     traefik.ingress.kubernetes.io/service.server.scheme: https
-          #     traefik.ingress.kubernetes.io/service.server.port: "9443"
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            annotations:
+              traefik.ingress.kubernetes.io/service.serversscheme: https
+              traefik.ingress.kubernetes.io/service.server.port: "9443"
+            hosts:
+              - host: "{{ portainer_hostname }}"
+                paths:
+                  - path: /
