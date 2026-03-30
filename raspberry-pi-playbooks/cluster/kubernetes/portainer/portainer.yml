@@ -1,54 +1,61 @@
 ---
-- name: Configure Code Space
+- name: Deploy Portainer to Kubernetes
   hosts: control_plane
-  gather_facts: false
   become: true
+  gather_facts: true
+
   vars:
     portainer_namespace: portainer
     portainer_hostname: "portainer.kubecluster"
-    portainer_manifest_url: "https://downloads.portainer.io/ce2-21/portainer-agent-k8s-nodeport.yaml"
-    ansible_files_path: "~/source/ansible-files"
+
   vars_files:
-    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+    - "~/source/ansible-files/vars/cluster_vars.yml"
 
   environment:
-    # The location of the kubeconfig file on the master.
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
-    - name: Create Portainer namespace
+    - name: Ensure Portainer namespace exists
       kubernetes.core.k8s:
         state: present
         kind: Namespace
         name: "{{ portainer_namespace }}"
 
-    - name: Add portainer-community chart repo
+    - name: Add Portainer Helm repository
       kubernetes.core.helm_repository:
         name: portainer
         repo_url: "https://portainer.github.io/k8s/"
         state: present
-      
-    - name: Deploy Portainer via Helm
+
+    - name: Deploy / upgrade Portainer via Helm
       kubernetes.core.helm:
         name: portainer
         chart_ref: portainer/portainer
-        release_namespace: portainer
-        create_namespace: true
+        release_namespace: "{{ portainer_namespace }}"
+        create_namespace: false
+        state: present
+
         values:
-          service:
-            type: ClusterIP
-          tls:
-            force: true
           image:
             tag: "lts"
+
+          service:
+            type: ClusterIP
+
+          tls:
+            force: true
+
+          persistence:
+            enabled: true
+            storageClass: longhorn
+
           ingress:
             enabled: true
             ingressClassName: traefik
             annotations:
               traefik.ingress.kubernetes.io/service.serversscheme: https
-              traefik.ingress.kubernetes.io/service.server.port: "9443"
             hosts:
               - host: "{{ portainer_hostname }}"
                 paths:
                   - path: /
+                    port: 9443
