@@ -6,5 +6,6 @@
     ansible_files_path: "~/source/ansible-files"
   vars_files:
     - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+    - "{{ ansible_files_path }}/vars/nhl_vars.yml"
   roles:
     - docker
