@@ -1,7 +1,7 @@
 ---
-- name: Backup docker minecraft.
-  import_playbook: minecraft/minecraft-docker-backup.yml
-  tags: ['minecraft']
+# - name: Backup docker minecraft.
+#   import_playbook: minecraft/minecraft-docker-backup.yml
+#   tags: ['minecraft']
 
 - name: Backup macbook.
   import_playbook: macbook/macbook-backup.yml
