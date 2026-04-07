@@ -55,7 +55,7 @@
   tasks:
     - name: Install K3s on control plane (takes a while).
       ansible.builtin.shell: >-
-        ~/k3s_install.sh >> ~/k3s_install_log.txt
+        K3S_KUBECONFIG_MODE="644" ~/k3s_install.sh >> ~/k3s_install_log.txt
       args:
         chdir: "~"
         creates: /var/lib/rancher/k3s/server/node-token
