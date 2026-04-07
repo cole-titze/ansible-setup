@@ -1,0 +1,385 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nhl-odds-secret
+  namespace: nhl-odds
+type: Opaque
+stringData:
+  postgres-password: "{{ nhl_odds_postgres_password }}"
+  odds-api-key: "{{ nhl_odds_odds_api_key }}"
+  api-backfill-key: "{{ nhl_odds_api_backfill_key }}"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nhl-odds-db-pvc
+  namespace: nhl-odds
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nhl-odds-database
+  namespace: nhl-odds
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-database
+  template:
+    metadata:
+      labels:
+        app: nhl-odds-database
+    spec:
+      containers:
+        - name: database
+          image: ghcr.io/cole-titze/nhl-odds/database:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5432
+          env:
+            - name: TZ
+              value: America/Chicago
+            - name: POSTGRES_DB
+              value: nhl
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-secret
+                  key: postgres-password
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "nhl"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "nhl"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: db-storage
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: nhl-odds-db-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhl-odds-database
+  namespace: nhl-odds
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: nhl-odds-database
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nhl-odds-webapi
+  namespace: nhl-odds
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-webapi
+  template:
+    metadata:
+      labels:
+        app: nhl-odds-webapi
+    spec:
+      containers:
+        - name: webapi
+          image: ghcr.io/cole-titze/nhl-odds/webapi:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: TZ
+              value: America/Chicago
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-secret
+                  key: postgres-password
+            - name: NHL_DATABASE
+              value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhl-odds-webapi
+  namespace: nhl-odds
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: nhl-odds-webapi
+
+---
+# The frontend image has a Docker-specific DNS resolver (127.0.0.11) baked into
+# its nginx.conf. This ConfigMap overrides it to work in Kubernetes.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nhl-odds-nginx-config
+  namespace: nhl-odds
+data:
+  default.conf: |
+    server {
+        listen 80;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /api/ {
+            proxy_pass http://nhl-odds-webapi:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nhl-odds-frontend
+  namespace: nhl-odds
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-frontend
+  template:
+    metadata:
+      labels:
+        app: nhl-odds-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/cole-titze/nhl-odds/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nhl-odds-nginx-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhl-odds-frontend
+  namespace: nhl-odds
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: nhl-odds-frontend
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nhl-odds
+  namespace: nhl-odds
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`nhl-odds.kubecluster`)
+      kind: Rule
+      services:
+        - name: nhl-odds-frontend
+          port: 80
+  tls:
+    certResolver: default
+
+---
+# CronJob: Daily NHL data collection (3am CT) — replaces scheduler/daily-data-collection.sh
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-entry-nhl-add
+  namespace: nhl-odds
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: entry
+              image: ghcr.io/cole-titze/nhl-odds/entry:latest
+              imagePullPolicy: Always
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RUN_MODE
+                  value: NhlAdd
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: postgres-password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+
+---
+# CronJob: Daily odds fetch — NextDayOdds (6am CT) — replaces scheduler/daily-odds-fetch.sh step 1
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-entry-next-day-odds
+  namespace: nhl-odds
+spec:
+  schedule: "0 6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: entry
+              image: ghcr.io/cole-titze/nhl-odds/entry:latest
+              imagePullPolicy: Always
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RUN_MODE
+                  value: NextDayOdds
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: postgres-password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                - name: ODDS_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: odds-api-key
+
+---
+# CronJob: Daily odds fetch — KalshiFetch (6:15am CT) — replaces scheduler/daily-odds-fetch.sh step 2
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-entry-kalshi-fetch
+  namespace: nhl-odds
+spec:
+  schedule: "15 6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: entry
+              image: ghcr.io/cole-titze/nhl-odds/entry:latest
+              imagePullPolicy: Always
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RUN_MODE
+                  value: KalshiFetch
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: postgres-password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+
+---
+# CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-predictor
+  namespace: nhl-odds
+spec:
+  schedule: "30 6 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: predictor
+              image: ghcr.io/cole-titze/nhl-odds/predictor:latest
+              imagePullPolicy: Always
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: postgres-password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"

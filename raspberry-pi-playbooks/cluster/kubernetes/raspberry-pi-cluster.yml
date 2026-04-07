@@ -139,17 +139,17 @@
   import_playbook: portainer/portainer.yml
   tags: ['portainer']
 
-- name: Set up codespace.
-  import_playbook: codespace/codespace.yml
-  tags: ['codespace']
+# - name: Set up codespace.
+#   import_playbook: codespace/codespace.yml
+#   tags: ['codespace']
 
 - name: Set up magic mirror.
   import_playbook: magic-mirror/magic-mirror.yml
   tags: ['magic-mirror']
 
-- name: Set up folding at home.
-  import_playbook: folding-at-home/folding-at-home.yml
-  tags: ['folding-at-home']
+# - name: Set up folding at home.
+#   import_playbook: folding-at-home/folding-at-home.yml
+#   tags: ['folding-at-home']
 
 - name: Set up esphome.
   import_playbook: esphome/esphome.yml
@@ -163,10 +163,13 @@
   import_playbook: prometheus/prometheus.yml
   tags: ['prometheus']
 
-# Needs work to get the backup on initialization.
-- name: Set up minecraft
-  import_playbook: minecraft/minecraft.yml
-  tags: ['minecraft']
+- name: Set up NHL Odds.
+  import_playbook: nhl-odds/nhl-odds.yml
+  tags: ['nhl-odds']
+
+# - name: Set up minecraft
+#   import_playbook: minecraft/minecraft.yml
+#   tags: ['minecraft']
 
 # Not needed, just a fun test
 # - name: Set up monero miner.

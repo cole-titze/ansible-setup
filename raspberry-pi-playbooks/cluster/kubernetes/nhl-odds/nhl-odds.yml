@@ -1,0 +1,27 @@
+---
+# Required variables (set in group_vars or ansible-vault):
+#   nhl_odds_postgres_password
+#   nhl_odds_odds_api_key
+#   nhl_odds_api_backfill_key
+
+- name: Configure NHL Odds
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create nhl-odds namespace.
+      k8s:
+        name: nhl-odds
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Apply nhl-odds manifests.
+      k8s:
+        definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"
+        state: present
