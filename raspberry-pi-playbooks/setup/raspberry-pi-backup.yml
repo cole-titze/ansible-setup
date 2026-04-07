@@ -6,6 +6,9 @@
     - raspberry-pi
 
   tasks:
+    - name: Install Pi-hole
+      ansible.builtin.import_tasks: ../../roles/docker/tasks/services/pi-hole/pi-hole.yml
+
     - name: Install Unbound
       ansible.builtin.apt:
         name: unbound
@@ -111,5 +114,5 @@
       cron:
         name: "Pi-hole DHCP failover watchdog"
         job: "/usr/local/bin/pihole-failover-check.sh"
-        minute: "*/2"
+        minute: "*/1"
         user: root

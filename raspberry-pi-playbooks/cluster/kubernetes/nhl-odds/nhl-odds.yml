@@ -3,11 +3,20 @@
 #   nhl_odds_postgres_password
 #   nhl_odds_odds_api_key
 #   nhl_odds_api_backfill_key
+#
+# Optional backup restore:
+#   Place a pg_dump file at ~/source/ansible-files/backups/nhl-odds/nhl.dump
+#   on the control machine. If present, it will be restored into the database
+#   after deployment.
 
 - name: Configure NHL Odds
   hosts: control_plane
   gather_facts: false
   become: true
+
+  vars:
+    local_backup_path: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/nhl.dump"
+    remote_backup_path: /tmp/nhl-odds-restore.dump
 
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
@@ -25,3 +34,44 @@
       k8s:
         definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"
         state: present
+
+    - name: Check if local database backup exists
+      ansible.builtin.stat:
+        path: "{{ local_backup_path }}"
+      register: backup_file
+      delegate_to: localhost
+
+    - name: Copy database backup to control plane
+      ansible.builtin.copy:
+        src: "{{ local_backup_path }}"
+        dest: "{{ remote_backup_path }}"
+        mode: '0644'
+      when: backup_file.stat.exists
+
+    - name: Wait for database pod to be ready
+      ansible.builtin.shell: |
+        kubectl wait --for=condition=ready pod -l app=nhl-odds-database -n nhl-odds --timeout=120s
+      when: backup_file.stat.exists
+
+    - name: Get database pod name
+      ansible.builtin.command: >
+        kubectl get pod -n nhl-odds -l app=nhl-odds-database -o jsonpath='{.items[0].metadata.name}'
+      register: db_pod_name
+      when: backup_file.stat.exists
+
+    - name: Copy dump into database pod
+      ansible.builtin.command: >
+        kubectl cp {{ remote_backup_path }} nhl-odds/{{ db_pod_name.stdout }}:/tmp/nhl-odds-restore.dump
+      when: backup_file.stat.exists
+
+    - name: Restore database from backup
+      ansible.builtin.command: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        pg_restore --username=postgres --dbname=nhl --clean --if-exists /tmp/nhl-odds-restore.dump
+      when: backup_file.stat.exists
+
+    - name: Remove backup from control plane
+      ansible.builtin.file:
+        path: "{{ remote_backup_path }}"
+        state: absent
+      when: backup_file.stat.exists

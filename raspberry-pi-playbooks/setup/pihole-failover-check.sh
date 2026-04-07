@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PRIMARY_IP="10.0.0.61"
+PRIMARY_IP="10.42.0.2"
 TIMEOUT=2
 
 if ping -c1 -W $TIMEOUT "$PRIMARY_IP" > /dev/null; then

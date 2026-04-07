@@ -56,6 +56,22 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/uninstall-kubernetes.yml
 ```
 
+#### NHL Odds
+
+Requires the following secrets in `~/source/ansible-files/vars/cluster_vars.yml`:
+
+| Variable | Description |
+|----------|-------------|
+| `nhl_odds_postgres_password` | PostgreSQL password |
+| `nhl_odds_odds_api_key` | odds-api.com API key |
+| `nhl_odds_api_backfill_key` | Backfill API key |
+
+To restore a database backup on deploy, place a `pg_dump` file at:
+```
+~/source/ansible-files/backups/nhl-odds/nhl.dump
+```
+If present, it will automatically be restored into the database after the pods start.
+
 ### Utilities
 
 ```bash
