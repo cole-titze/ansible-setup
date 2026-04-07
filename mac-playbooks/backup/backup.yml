@@ -11,6 +11,10 @@
   import_playbook: home-assistant/home-assistant-backup.yml
   tags: ['home-assistant']
 
+- name: Backup NHL Odds database.
+  import_playbook: nhl-odds/nhl-odds-backup.yml
+  tags: ['nhl-odds']
+
 # Not using minecraft kubernetes yet
 # - name: Backup minecraft.
 #   import_playbook: minecraft/minecraft-backup.yml

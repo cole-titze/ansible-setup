@@ -383,3 +383,58 @@ spec:
                       key: postgres-password
                 - name: NHL_DATABASE
                   value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nhl-odds-backup-pvc
+  namespace: nhl-odds
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# CronJob: Nightly database backup (1am CT) with 7-day retention
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-db-backup
+  namespace: nhl-odds
+spec:
+  schedule: "0 1 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:16
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: postgres-password
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
+                  pg_dump -h nhl-odds-database -U postgres -Fc nhl > "$BACKUP_FILE"
+                  echo "Backup saved to $BACKUP_FILE"
+                  find /backups -name "nhl-*.dump" -mtime +7 -delete
+                  echo "Old backups pruned"
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: nhl-odds-backup-pvc

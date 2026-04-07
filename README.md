@@ -66,11 +66,17 @@ Requires the following secrets in `~/source/ansible-files/vars/cluster_vars.yml`
 | `nhl_odds_odds_api_key` | odds-api.com API key |
 | `nhl_odds_api_backfill_key` | Backfill API key |
 
-To restore a database backup on deploy, place a `pg_dump` file at:
+**Backup/restore:**
+
+Pull a backup from the cluster to your Mac:
+```bash
+ansible-playbook -i inventories/inventory.ini mac-playbooks/backup/backup.yml -t nhl-odds
 ```
-~/source/ansible-files/backups/nhl-odds/nhl.dump
-```
-If present, it will automatically be restored into the database after the pods start.
+This saves to `~/source/ansible-files/backups/nhl-odds/nhl.dump`.
+
+To restore on next deploy, ensure that file exists — the deploy playbook checks for it automatically and restores it after the pods start.
+
+A nightly CronJob (`nhl-odds-db-backup`) also runs at 1am CT inside the cluster, keeping 7 days of backups on a dedicated PVC.
 
 ### Utilities
 
