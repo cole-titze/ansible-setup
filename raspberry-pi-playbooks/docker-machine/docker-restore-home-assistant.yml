@@ -57,9 +57,8 @@
     - name: Extract latest Home Assistant backup directly to /var/homeassistant
       ansible.builtin.shell: |
         set -e
-        latest_backup=$(ls -Art "/home/{{ ansible_user }}/backups/homeassistant" | tail -n 1)
-        tar -xOf "/home/{{ ansible_user }}/backups/homeassistant/$latest_backup" "./homeassistant.tar.gz" | tar --strip-components=1 -zxf - -C /var/homeassistant
-      args:
+        latest_backup=$(ls -Art "/home/pi/backups/homeassistant" | tail -n 1)
+        tar -xzf "/home/pi/backups/homeassistant/$latest_backup" -C /var/homeassistant      args:
         executable: /bin/bash
       when: 
         - backup_files.matched > 0
