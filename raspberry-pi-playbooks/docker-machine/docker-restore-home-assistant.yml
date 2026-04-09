@@ -58,7 +58,7 @@
       ansible.builtin.shell: |
         set -e
         latest_backup=$(ls -Art "/home/pi/backups/homeassistant" | tail -n 1)
-        tar -xzf "/home/pi/backups/homeassistant/$latest_backup" -C /var/homeassistant      args:
+        tar -xf "/home/pi/backups/homeassistant/$latest_backup" -C /var/homeassistant      args:
         executable: /bin/bash
       when: 
         - backup_files.matched > 0
