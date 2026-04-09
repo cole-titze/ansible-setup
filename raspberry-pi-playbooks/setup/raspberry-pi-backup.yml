@@ -1,6 +1,6 @@
 ---
 - name: Setup Raspberry Pi
-  hosts: backup_raspberrypis
+  hosts: backup_raspberrypi
   become: true
   roles:
     - raspberry-pi
