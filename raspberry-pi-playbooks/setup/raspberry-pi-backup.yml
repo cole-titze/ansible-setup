@@ -6,9 +6,6 @@
     - raspberry-pi
 
   tasks:
-    - name: Install Pi-hole
-      ansible.builtin.import_tasks: ../../roles/docker/tasks/services/pi-hole/pi-hole.yml
-
     - name: Install Unbound
       ansible.builtin.apt:
         name: unbound
@@ -101,7 +98,10 @@
         name: unbound
         state: restarted
         enabled: yes
-    
+
+    - name: Install Pi-hole
+      ansible.builtin.import_tasks: ../../roles/docker/tasks/services/pi-hole/pi-hole.yml
+
     - name: Copy DHCP failover script to backup Pi-hole
       copy:
         src: pihole-failover-check.sh
