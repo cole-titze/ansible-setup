@@ -42,7 +42,7 @@ metadata:
   name: nhl-odds-database
   namespace: nhl-odds
 spec:
-  instances: 1
+  instances: {{ groups['cluster'] | length }}
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   superuserSecret:
     name: nhl-odds-superuser

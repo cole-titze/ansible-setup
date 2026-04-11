@@ -93,14 +93,14 @@
       register: control_node
       changed_when: false
 
-    - name: Check if the control plane is already tainted
-      command: kubectl get node {{ control_node.stdout }} -o jsonpath='{.spec.taints}'
-      register: node_taints
-      changed_when: false
+    # - name: Check if the control plane is already tainted
+    #   command: kubectl get node {{ control_node.stdout }} -o jsonpath='{.spec.taints}'
+    #   register: node_taints
+    #   changed_when: false
 
-    - name: Taint the control plane node if not already tainted
-      command: kubectl taint nodes {{ control_node.stdout }} node-role.kubernetes.io/control-plane:NoSchedule --overwrite
-      when: "'NoSchedule' not in node_taints.stdout"
+    # - name: Taint the control plane node if not already tainted
+    #   command: kubectl taint nodes {{ control_node.stdout }} node-role.kubernetes.io/control-plane:NoSchedule --overwrite
+    #   when: "'NoSchedule' not in node_taints.stdout"
 
 
 - name: Configure the worker nodes.
