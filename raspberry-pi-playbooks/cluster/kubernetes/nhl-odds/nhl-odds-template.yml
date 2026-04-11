@@ -9,6 +9,7 @@ stringData:
   postgres-password: "{{ nhl_odds_postgres_password }}"
   odds-api-key: "{{ nhl_odds_odds_api_key }}"
   api-backfill-key: "{{ nhl_odds_api_backfill_key }}"
+  cloudflare-tunnel-token: "{{ nhl_odds_cloudflare_tunnel_token }}"
 
 ---
 # Secret for CloudNativePG superuser — CNPG requires 'username' + 'password' keys
@@ -64,7 +65,7 @@ metadata:
   name: nhl-odds-webapi
   namespace: nhl-odds
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: nhl-odds-webapi
@@ -73,6 +74,15 @@ spec:
       labels:
         app: nhl-odds-webapi
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: nhl-odds-webapi
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: webapi
           image: ghcr.io/cole-titze/nhl-odds/webapi:latest
@@ -162,7 +172,7 @@ metadata:
   name: nhl-odds-frontend
   namespace: nhl-odds
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: nhl-odds-frontend
@@ -171,6 +181,15 @@ spec:
       labels:
         app: nhl-odds-frontend
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: nhl-odds-frontend
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: frontend
           image: ghcr.io/cole-titze/nhl-odds/frontend:latest
@@ -353,25 +372,14 @@ spec:
                 - name: NHL_DATABASE
                   value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
 
+{% for host in groups['control_plane'] %}
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: nhl-odds-backup-pvc
-  namespace: nhl-odds
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-
----
-# CronJob: Nightly database backup (1am CT) with 7-day retention
+# CronJob: Nightly database backup (1am CT) with 7-day retention — {{ host }}
+# Dumps land at /home/pi/backups/nhl-odds/ on each node for SFTP retrieval
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: nhl-odds-db-backup
+  name: nhl-odds-db-backup-{{ host }}
   namespace: nhl-odds
 spec:
   schedule: "0 1 * * *"
@@ -380,6 +388,8 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          nodeSelector:
+            kubernetes.io/hostname: {{ host }}
           containers:
             - name: backup
               image: postgres:17
@@ -395,6 +405,7 @@ spec:
               args:
                 - |
                   set -e
+                  mkdir -p /backups
                   BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
                   pg_dump -h nhl-odds-database-rw -U postgres -Fc nhl > "$BACKUP_FILE"
                   echo "Backup saved to $BACKUP_FILE"
@@ -405,5 +416,55 @@ spec:
                   mountPath: /backups
           volumes:
             - name: backup-storage
-              persistentVolumeClaim:
-                claimName: nhl-odds-backup-pvc
+              hostPath:
+                path: /home/pi/backups/nhl-odds
+                type: DirectoryOrCreate
+{% endfor %}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: nhl-odds
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: cloudflared
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          args:
+            - tunnel
+            - --no-autoupdate
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-secret
+                  key: cloudflare-tunnel-token
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
