@@ -8,6 +8,7 @@
         dest: "ssh"
       - src: "{{ lookup('env', 'HOME') }}/.kube"
         dest: "kube"
+
     icloud_base_dir: "{{ lookup('env', 'HOME') }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
     timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
     icloud_backup_dir: "{{ icloud_base_dir }}/backup_{{ timestamp }}"
@@ -25,6 +26,12 @@
         dest: "{{ icloud_backup_dir }}/{{ item.dest }}/"
         archive: true
         recursive: true
+        rsync_opts:
+          - "--no-specials"
+          - "--no-devices"
+          - "--exclude=*.sock"
+          - "--exclude=ssh-*"
+          - "--exclude=agent.*"
       loop: "{{ src_map }}"
 
     - name: Print backup location
@@ -45,7 +52,11 @@
     - name: Filter backups older than 30 days, excluding the most recent
       ansible.builtin.set_fact:
         deletable_backups: >-
-          {{ sorted_backups[1:] | selectattr('mtime', 'lt', (ansible_date_time.epoch | int) - 2592000) | list }}
+          {{
+            sorted_backups[1:]
+            | selectattr('mtime', 'lt', (ansible_date_time.epoch | int) - 2592000)
+            | list
+          }}
 
     - name: Remove old backup directories (but always keep most recent)
       ansible.builtin.file:
