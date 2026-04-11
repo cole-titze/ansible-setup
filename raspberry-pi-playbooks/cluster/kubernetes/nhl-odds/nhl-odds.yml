@@ -23,6 +23,11 @@
     PATH: "~/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
+    - name: Install CloudNativePG operator.
+      ansible.builtin.command: >
+        kubectl apply --server-side -f
+        https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.0.yaml
+
     - name: Create nhl-odds namespace.
       k8s:
         name: nhl-odds
@@ -50,12 +55,12 @@
 
     - name: Wait for database pod to be ready
       ansible.builtin.shell: |
-        kubectl wait --for=condition=ready pod -l app=nhl-odds-database -n nhl-odds --timeout=120s
+        kubectl wait --for=condition=ready pod -l cnpg.io/cluster=nhl-odds-database,role=primary -n nhl-odds --timeout=300s
       when: backup_file.stat.exists
 
     - name: Get database pod name
       ansible.builtin.command: >
-        kubectl get pod -n nhl-odds -l app=nhl-odds-database -o jsonpath='{.items[0].metadata.name}'
+        kubectl get pod -n nhl-odds -l cnpg.io/cluster=nhl-odds-database,role=primary -o jsonpath='{.items[0].metadata.name}'
       register: db_pod_name
       when: backup_file.stat.exists
 

@@ -11,91 +11,51 @@ stringData:
   api-backfill-key: "{{ nhl_odds_api_backfill_key }}"
 
 ---
+# Secret for CloudNativePG superuser — CNPG requires 'username' + 'password' keys
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: Secret
 metadata:
-  name: nhl-odds-db-pvc
+  name: nhl-odds-superuser
   namespace: nhl-odds
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
+type: kubernetes.io/basic-auth
+stringData:
+  username: postgres
+  password: "{{ nhl_odds_postgres_password }}"
 
 ---
-apiVersion: apps/v1
-kind: Deployment
+# Schema ConfigMap — SQL fetched from nhl-odds repo at deploy time
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nhl-odds-schema
+  namespace: nhl-odds
+data:
+  create-tables.sql: |
+    {{ lookup('url', 'https://raw.githubusercontent.com/cole-titze/nhl-odds/main/database/Scripts/CreateTables.sql') | indent(4) }}
+
+---
+# CloudNativePG Cluster — replaces plain Deployment + PVC
+# CNPG automatically creates services: nhl-odds-database-rw (primary), nhl-odds-database-r (any), nhl-odds-database-ro (replicas)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
 metadata:
   name: nhl-odds-database
   namespace: nhl-odds
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nhl-odds-database
-  template:
-    metadata:
-      labels:
-        app: nhl-odds-database
-    spec:
-      containers:
-        - name: database
-          image: ghcr.io/cole-titze/nhl-odds/database:latest
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 5432
-          env:
-            - name: TZ
-              value: America/Chicago
-            - name: POSTGRES_DB
-              value: nhl
-            - name: POSTGRES_USER
-              value: postgres
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: nhl-odds-secret
-                  key: postgres-password
-          livenessProbe:
-            exec:
-              command: ["pg_isready", "-U", "postgres", "-d", "nhl"]
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          readinessProbe:
-            exec:
-              command: ["pg_isready", "-U", "postgres", "-d", "nhl"]
-            initialDelaySeconds: 15
-            periodSeconds: 10
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-          volumeMounts:
-            - mountPath: /var/lib/postgresql/data
-              name: db-storage
-      volumes:
-        - name: db-storage
-          persistentVolumeClaim:
-            claimName: nhl-odds-db-pvc
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nhl-odds-database
-  namespace: nhl-odds
-spec:
-  type: ClusterIP
-  ports:
-    - port: 5432
-      targetPort: 5432
-      protocol: TCP
-  selector:
-    app: nhl-odds-database
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  superuserSecret:
+    name: nhl-odds-superuser
+  bootstrap:
+    initdb:
+      database: nhl
+      owner: postgres
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: nhl-odds-schema
+            key: create-tables.sql
+  storage:
+    size: 10Gi
 
 ---
 apiVersion: apps/v1
@@ -128,7 +88,7 @@ spec:
                   name: nhl-odds-secret
                   key: postgres-password
             - name: NHL_DATABASE
-              value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+              value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
           livenessProbe:
             tcpSocket:
               port: 8080
@@ -179,6 +139,15 @@ data:
             proxy_pass http://nhl-odds-webapi:8080;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        location /mcp {
+            proxy_pass http://nhl-odds-webapi:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_read_timeout 3600s;
         }
 
         location / {
@@ -286,7 +255,7 @@ spec:
                       name: nhl-odds-secret
                       key: postgres-password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Daily odds fetch — NextDayOdds (6am CT) — replaces scheduler/daily-odds-fetch.sh step 1
@@ -317,7 +286,7 @@ spec:
                       name: nhl-odds-secret
                       key: postgres-password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
                 - name: ODDS_API_KEY
                   valueFrom:
                     secretKeyRef:
@@ -353,7 +322,7 @@ spec:
                       name: nhl-odds-secret
                       key: postgres-password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
@@ -382,7 +351,7 @@ spec:
                       name: nhl-odds-secret
                       key: postgres-password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
 
 ---
 apiVersion: v1
@@ -413,7 +382,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: backup
-              image: postgres:16
+              image: postgres:17
               env:
                 - name: TZ
                   value: America/Chicago
@@ -427,7 +396,7 @@ spec:
                 - |
                   set -e
                   BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
-                  pg_dump -h nhl-odds-database -U postgres -Fc nhl > "$BACKUP_FILE"
+                  pg_dump -h nhl-odds-database-rw -U postgres -Fc nhl > "$BACKUP_FILE"
                   echo "Backup saved to $BACKUP_FILE"
                   find /backups -name "nhl-*.dump" -mtime +7 -delete
                   echo "Old backups pruned"
