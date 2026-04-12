@@ -20,7 +20,7 @@
 
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/{{ ansible_user }}/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
     - name: Install CloudNativePG operator.
@@ -29,14 +29,14 @@
         https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.0.yaml
 
     - name: Create nhl-odds namespace.
-      k8s:
+      kubernetes.core.k8s:
         name: nhl-odds
         api_version: v1
         kind: Namespace
         state: present
 
     - name: Apply nhl-odds manifests.
-      k8s:
+      kubernetes.core.k8s:
         definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"
         state: present
 

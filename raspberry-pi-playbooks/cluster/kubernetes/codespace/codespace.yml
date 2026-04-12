@@ -11,11 +11,11 @@
   environment:
     # The location of the kubeconfig file on the master.
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/{{ ansible_user }}/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
     - name: Create codespace namespace
-      k8s:
+      kubernetes.core.k8s:
         name: codespace
         api_version: v1
         kind: Namespace
@@ -35,6 +35,6 @@
             password: "{{ code_space_password }}"
 
     - name: Deploy Codespace Deployment + Service
-      k8s:
+      kubernetes.core.k8s:
         definition: "{{ lookup('template', 'codespace-template.yml') }}"
         state: present

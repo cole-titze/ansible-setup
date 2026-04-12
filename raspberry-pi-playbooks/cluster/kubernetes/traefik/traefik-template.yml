@@ -41,7 +41,7 @@ spec:
       volumes:
         - name: certs
           secret:
-            secretName: code-local-cert
+            secretName: local-cert
 ---
 apiVersion: v1
 kind: Service
