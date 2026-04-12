@@ -77,8 +77,13 @@
           - python3-openshift
           - python3-yaml
           - build-essential
-          - golang
           - git
+        state: present
+      become: true
+
+    - name: Install golang (takes a while).
+      ansible.builtin.package:
+        name: golang
         state: present
       become: true
 
