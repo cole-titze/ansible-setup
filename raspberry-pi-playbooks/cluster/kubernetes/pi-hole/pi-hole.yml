@@ -7,18 +7,18 @@
   environment:
     # The location of the kubeconfig file on the master.
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+    PATH: "/home/{{ ansible_user }}/go/bin:{{ ansible_env.PATH }}"
 
   tasks:
     - name: Create pi-hole namespace.
-      k8s:
+      kubernetes.core.k8s:
         name: pi-hole
         api_version: v1
         kind: Namespace
         state: present
 
     - name: Apply pi hole manifests.
-      k8s:
+      kubernetes.core.k8s:
         definition: "{{ lookup('template', 'pi-hole-template.yml' ) }}"
         state: present
 
