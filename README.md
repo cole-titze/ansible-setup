@@ -53,6 +53,20 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-mach
 
 ### Kubernetes cluster
 
+#### Cluster services
+
+Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Portainer | `https://10.42.0.21:30779` | K8s management UI |
+| Grafana | `http://10.42.0.21:30300` | Cluster monitoring |
+| Longhorn | `http://10.42.0.21:30880` | Storage management |
+| Esphome | `http://10.42.0.21:30605` | ESP device management |
+| Magic Mirror | `http://10.42.0.21:30808` | Smart mirror UI |
+| Traefik | `http://10.42.0.21:31498` | Ingress dashboard |
+| NHL Odds | `https://odds.nhlwager.com` | External (Cloudflare tunnel) |
+
 ```bash
 # Full cluster setup (K3s, Helm, Longhorn, all services)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml

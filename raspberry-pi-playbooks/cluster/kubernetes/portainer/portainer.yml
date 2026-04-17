@@ -40,7 +40,8 @@
             tag: "lts"
 
           service:
-            type: ClusterIP
+            type: NodePort
+            nodePort: 30900
 
           tls:
             force: true
@@ -50,12 +51,27 @@
             storageClass: longhorn
 
           ingress:
-            enabled: true
-            ingressClassName: traefik
-            annotations:
-              traefik.ingress.kubernetes.io/service.serversscheme: https
-            hosts:
-              - host: "{{ portainer_hostname }}"
-                paths:
-                  - path: /
-                    port: 9443
+            enabled: false
+
+    - name: Create Portainer IngressRoute
+      ansible.builtin.shell: |
+        kubectl apply -f - <<EOF
+        apiVersion: traefik.io/v1alpha1
+        kind: IngressRoute
+        metadata:
+          name: portainer
+          namespace: {{ portainer_namespace }}
+        spec:
+          entryPoints:
+            - websecure
+          routes:
+            - match: "Host(\`{{ portainer_hostname }}\`)"
+              kind: Rule
+              services:
+                - name: portainer
+                  port: 9443
+                  scheme: https
+          tls:
+            secretName: local-cert
+        EOF
+      changed_when: false

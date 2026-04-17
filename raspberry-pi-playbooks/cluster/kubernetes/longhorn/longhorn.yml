@@ -35,6 +35,11 @@
             replicaSoftAntiAffinity: true
             defaultDataPath: "/var/lib/longhorn"
 
+    - name: Expose Longhorn frontend as NodePort
+      ansible.builtin.shell: |
+        kubectl patch svc longhorn-frontend -n longhorn-system -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":80,"nodePort":30880}]}}'
+      changed_when: false
+
     - name: Create Longhorn IngressRoute
       kubernetes.core.k8s:
         state: present

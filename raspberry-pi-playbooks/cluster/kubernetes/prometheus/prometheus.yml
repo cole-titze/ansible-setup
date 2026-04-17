@@ -35,7 +35,8 @@
             image:
               pullPolicy: Always
             service:
-              type: ClusterIP
+              type: NodePort
+              nodePort: 30300
             ingress:
               enabled: true
               ingressClassName: traefik

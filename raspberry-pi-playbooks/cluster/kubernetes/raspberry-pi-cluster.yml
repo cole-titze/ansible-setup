@@ -53,6 +53,20 @@
     - ../storage/config.yml
 
   tasks:
+    - name: Ensure k3s config directory exists.
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: '0755'
+
+    - name: Write k3s server config.
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        content: |
+          disable:
+            - traefik
+        mode: '0644'
+
     - name: Install K3s on control plane (takes a while).
       ansible.builtin.shell: >-
         K3S_KUBECONFIG_MODE="644" ~/k3s_install.sh --cluster-cidr=10.43.0.0/16 --flannel-backend=host-gw >> ~/k3s_install_log.txt
@@ -98,14 +112,18 @@
       register: control_node
       changed_when: false
 
-    # - name: Check if the control plane is already tainted
-    #   command: kubectl get node {{ control_node.stdout }} -o jsonpath='{.spec.taints}'
-    #   register: node_taints
-    #   changed_when: false
+    - name: Check if the control plane is already tainted
+      command: kubectl get node {{ control_node.stdout }} -o jsonpath='{.spec.taints}'
+      register: node_taints
+      changed_when: false
 
-    # - name: Taint the control plane node if not already tainted
-    #   command: kubectl taint nodes {{ control_node.stdout }} node-role.kubernetes.io/control-plane:NoSchedule --overwrite
-    #   when: "'NoSchedule' not in node_taints.stdout"
+    - name: Taint the control plane node if not already tainted (NoSchedule)
+      command: kubectl taint nodes {{ control_node.stdout }} node-role.kubernetes.io/control-plane:NoSchedule --overwrite
+      when: "'NoSchedule' not in node_taints.stdout"
+
+    - name: Taint the control plane node if not already tainted (NoExecute)
+      command: kubectl taint nodes {{ control_node.stdout }} node-role.kubernetes.io/control-plane:NoExecute --overwrite
+      when: "'NoExecute' not in node_taints.stdout"
 
 
 - name: Configure the worker nodes.

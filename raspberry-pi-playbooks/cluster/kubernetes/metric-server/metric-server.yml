@@ -16,20 +16,20 @@
         kind: Namespace
         state: present
 
-    - name: Add Bitnami Helm Repository
+    - name: Add metrics-server Helm Repository
       kubernetes.core.helm_repository:
-        name: bitnami
-        repo_url: "https://charts.bitnami.com/bitnami"
+        name: metrics-server
+        repo_url: "https://kubernetes-sigs.github.io/metrics-server/"
 
     - name: Deploy Metrics Server using Helm
       kubernetes.core.helm:
         name: metrics-server
-        chart_ref: bitnami/metrics-server
+        chart_ref: metrics-server/metrics-server
         release_namespace: metric-server
         create_namespace: true
         values:
-          image:
-            pullPolicy: Always
+          args:
+            - --kubelet-insecure-tls
           resources:
             requests:
               cpu: "100m"

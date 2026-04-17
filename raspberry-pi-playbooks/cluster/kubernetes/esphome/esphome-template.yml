@@ -48,7 +48,7 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: nfs-client
+  storageClassName: longhorn
 
 ---
 apiVersion: v1
@@ -57,11 +57,12 @@ metadata:
   name: esphome
   namespace: home-assistant
 spec:
-  type: ClusterIP
+  type: NodePort
   ports:
     - name: web
       port: 6052
       targetPort: 6052
+      nodePort: 30605
       protocol: TCP
     - name: api
       port: 6123
