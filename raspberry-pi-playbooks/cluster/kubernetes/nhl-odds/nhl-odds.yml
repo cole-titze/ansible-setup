@@ -89,25 +89,40 @@
       changed_when: false
       when: backup_file.stat.exists
 
+    - name: Check if database already has data
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -d nhl -tAc 'SELECT COUNT(*) FROM "GameCleaned"'
+      register: db_row_count
+      changed_when: false
+      when: backup_file.stat.exists
+
     - name: Copy backup into database pod
       ansible.builtin.command: >
         kubectl cp {{ remote_backup_path }} nhl-odds/{{ db_pod_name.stdout }}:/var/lib/postgresql/data/restore.dump
-      when: backup_file.stat.exists
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
     - name: Restore database from backup
       ansible.builtin.shell: >
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
         pg_restore --username=postgres --dbname=nhl --clean --if-exists --verbose /var/lib/postgresql/data/restore.dump
-      when: backup_file.stat.exists
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
     - name: Remove backup from database pod
       ansible.builtin.shell: >
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} -- rm /var/lib/postgresql/data/restore.dump
       changed_when: false
-      when: backup_file.stat.exists
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
     - name: Remove backup from control plane
       ansible.builtin.file:
         path: "{{ remote_backup_path }}"
         state: absent
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
+
+    - name: Sync postgres password with secret
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -c "ALTER USER postgres WITH PASSWORD '{{ nhl_odds_postgres_password }}'"
+      changed_when: false
       when: backup_file.stat.exists
