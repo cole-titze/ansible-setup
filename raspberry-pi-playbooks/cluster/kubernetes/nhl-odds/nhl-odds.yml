@@ -91,18 +91,18 @@
 
     - name: Copy backup into database pod
       ansible.builtin.command: >
-        kubectl cp {{ remote_backup_path }} nhl-odds/{{ db_pod_name.stdout }}:/tmp/restore.dump
+        kubectl cp {{ remote_backup_path }} nhl-odds/{{ db_pod_name.stdout }}:/var/lib/postgresql/data/restore.dump
       when: backup_file.stat.exists
 
     - name: Restore database from backup
       ansible.builtin.shell: >
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
-        pg_restore --username=postgres --dbname=nhl --clean --if-exists --verbose /tmp/restore.dump
+        pg_restore --username=postgres --dbname=nhl --clean --if-exists --verbose /var/lib/postgresql/data/restore.dump
       when: backup_file.stat.exists
 
     - name: Remove backup from database pod
       ansible.builtin.shell: >
-        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} -- rm /tmp/restore.dump
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} -- rm /var/lib/postgresql/data/restore.dump
       changed_when: false
       when: backup_file.stat.exists
 
