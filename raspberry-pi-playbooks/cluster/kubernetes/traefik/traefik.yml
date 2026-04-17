@@ -59,7 +59,8 @@
     - name: Install Traefik CRDs
       ansible.builtin.shell: >-
         kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
-      changed_when: true
+      register: traefik_crds
+      changed_when: "'configured' in traefik_crds.stdout or 'created' in traefik_crds.stdout"
 
     - name: Create TLS secret
       kubernetes.core.k8s:
