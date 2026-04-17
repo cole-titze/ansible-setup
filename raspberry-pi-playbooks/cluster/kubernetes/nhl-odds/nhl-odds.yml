@@ -31,6 +31,8 @@
       ansible.builtin.command: >
         kubectl apply --server-side -f
         https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.0.yaml
+      register: cnpg_install
+      changed_when: "'configured' in cnpg_install.stdout or 'created' in cnpg_install.stdout"
 
     - name: Create nhl-odds namespace.
       kubernetes.core.k8s:
@@ -58,13 +60,6 @@
       register: backup_file
       delegate_to: localhost
       become: false
-
-    - name: Copy database backup to control plane
-      ansible.builtin.copy:
-        src: "{{ local_backup_path }}"
-        dest: "{{ remote_backup_path }}"
-        mode: '0644'
-      when: backup_file.stat.exists
 
     - name: Wait for database pod to exist
       ansible.builtin.shell: |
@@ -96,6 +91,13 @@
       register: db_row_count
       changed_when: false
       when: backup_file.stat.exists
+
+    - name: Copy database backup to control plane
+      ansible.builtin.copy:
+        src: "{{ local_backup_path }}"
+        dest: "{{ remote_backup_path }}"
+        mode: '0644'
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
     - name: Copy backup into database pod
       ansible.builtin.command: >
