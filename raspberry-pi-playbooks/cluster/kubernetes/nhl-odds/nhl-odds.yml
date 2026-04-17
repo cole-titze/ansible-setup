@@ -39,6 +39,14 @@
         kind: Namespace
         state: present
 
+    - name: Fetch NHL Odds schema SQL
+      ansible.builtin.uri:
+        url: https://raw.githubusercontent.com/cole-titze/nhl-odds/main/database/Scripts/CreateTables.sql
+        return_content: true
+      register: schema_sql
+      delegate_to: localhost
+      become: false
+
     - name: Apply nhl-odds manifests.
       kubernetes.core.k8s:
         definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"
@@ -79,15 +87,11 @@
       register: db_pod_name
       when: backup_file.stat.exists
 
-    - name: Copy dump into database pod
-      ansible.builtin.command: >
-        kubectl cp {{ remote_backup_path }} nhl-odds/{{ db_pod_name.stdout }}:/tmp/nhl-odds-restore.dump
-      when: backup_file.stat.exists
-
     - name: Restore database from backup
-      ansible.builtin.command: >
-        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
-        pg_restore --username=postgres --dbname=nhl --clean --if-exists /tmp/nhl-odds-restore.dump
+      ansible.builtin.shell: >
+        kubectl exec -i -n nhl-odds {{ db_pod_name.stdout }} --
+        pg_restore --username=postgres --dbname=nhl --clean --if-exists --verbose
+        < {{ remote_backup_path }}
       when: backup_file.stat.exists
 
     - name: Remove backup from control plane

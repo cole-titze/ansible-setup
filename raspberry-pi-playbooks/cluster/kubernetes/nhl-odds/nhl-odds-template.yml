@@ -32,7 +32,7 @@ metadata:
   namespace: nhl-odds
 data:
   create-tables.sql: |
-    {{ lookup('url', 'https://raw.githubusercontent.com/cole-titze/nhl-odds/main/database/Scripts/CreateTables.sql') | join('\n') | indent(4) }}
+    {{ schema_sql.content | indent(4) }}
 
 ---
 # CloudNativePG Cluster — replaces plain Deployment + PVC
@@ -43,7 +43,7 @@ metadata:
   name: nhl-odds-database
   namespace: nhl-odds
 spec:
-  instances: {{ groups['cluster'] | length }}
+  instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:17
   superuserSecret:
     name: nhl-odds-superuser

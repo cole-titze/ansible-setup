@@ -6,11 +6,16 @@ Main orchestration repo for my homelab Ansible playbooks.
 
 - Ansible installed on your control machine
 - SSH keys configured for each host (see `inventories/inventory.ini`)
+- On macOS, add to your shell profile to prevent Python fork crashes:
+  ```bash
+  export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+  ```
 
-## Installing required roles
+## Installing required roles and collections
 
 ```bash
 ansible-galaxy install -r requirements.yml --roles-path roles/ --force
+ansible-galaxy collection install community.crypto kubernetes.core
 ```
 
 ## Running playbooks
@@ -33,11 +38,17 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/setup/raspb
 
 ### Docker machine (dockerpi)
 
-Requires secrets in `~/source/ansible-files/vars/cluster_vars.yml`.
+Requires secrets in `~/source/ansible-files/vars/cluster_vars.yml` and `nhl_vars.yml`.
 
 ```bash
 # Install Docker + deploy active containers (Portainer, NHL Odds, Unbound)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-machine/docker-setup.yml
+
+# Skip the NHL Odds container
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-machine/docker-setup.yml --skip-tags nhl-odds
+
+# Uninstall the Docker NHL Odds container and cron jobs
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-machine/uninstall-nhl-odds.yml
 ```
 
 ### Kubernetes cluster
@@ -58,13 +69,14 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 
 #### NHL Odds
 
-Requires the following secrets in `~/source/ansible-files/vars/cluster_vars.yml`:
+Requires the following secrets in `~/source/ansible-files/vars/nhl_vars.yml`:
 
 | Variable | Description |
 |----------|-------------|
 | `nhl_odds_postgres_password` | PostgreSQL password |
-| `nhl_odds_odds_api_key` | odds-api.com API key |
+| `nhl_odds_api_key` | odds-api.com API key |
 | `nhl_odds_api_backfill_key` | Backfill API key |
+| `nhl_odds_cloudflare_tunnel_token` | Cloudflare tunnel token for external access |
 
 **Backup/restore:**
 
@@ -89,9 +101,9 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/s
 ```
 
 Helper scripts (need `chmod +x` first):
-- `raspberry-pi-playbooks/utilities/scripts/Deploy.sh`
-- `raspberry-pi-playbooks/utilities/scripts/Upgrade.sh`
-- `raspberry-pi-playbooks/utilities/scripts/Uninstall.sh`
+- `raspberry-pi-playbooks/utilities/scripts/Deploy.sh` — full cluster deploy
+- `raspberry-pi-playbooks/utilities/scripts/Upgrade.sh` — upgrade all Pis
+- `raspberry-pi-playbooks/utilities/scripts/Uninstall.sh` — uninstall K3s cluster
 
 ### Mac backups
 

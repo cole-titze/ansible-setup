@@ -1,0 +1,44 @@
+---
+- name: Uninstall Docker nhl-odds
+  hosts: docker
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+    - "{{ ansible_files_path }}/vars/nhl_vars.yml"
+
+  tasks:
+    - name: Stop and remove nhl-odds containers
+      community.docker.docker_compose_v2:
+        project_src: "/home/{{ ansible_user }}/nhl-odds"
+        state: absent
+        remove_volumes: true
+      ignore_errors: true
+
+    - name: Remove nhl-odds update cron job
+      ansible.builtin.cron:
+        name: "Update nhl-odds containers"
+        state: absent
+        user: root
+
+    - name: Remove nhl-odds backup cron job
+      ansible.builtin.cron:
+        name: "Backup nhl-odds database"
+        state: absent
+        user: root
+
+    - name: Remove nhl-odds update script
+      ansible.builtin.file:
+        path: /usr/local/bin/nhl-odds-update.sh
+        state: absent
+
+    - name: Remove nhl-odds backup script
+      ansible.builtin.file:
+        path: /usr/local/bin/nhl-odds-backup.sh
+        state: absent
+
+    - name: Remove nhl-odds directory
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/nhl-odds"
+        state: absent
