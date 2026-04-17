@@ -86,4 +86,4 @@ spec:
         - name: esphome
           port: 6052
   tls:
-    certResolver: default
+    secretName: local-cert

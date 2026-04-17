@@ -67,4 +67,4 @@ spec:
         - name: magic-mirror
           port: 8082
   tls:
-    certResolver: default
+    secretName: local-cert

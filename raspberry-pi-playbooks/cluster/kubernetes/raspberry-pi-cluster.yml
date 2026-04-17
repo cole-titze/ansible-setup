@@ -55,7 +55,7 @@
   tasks:
     - name: Install K3s on control plane (takes a while).
       ansible.builtin.shell: >-
-        K3S_KUBECONFIG_MODE="644" ~/k3s_install.sh --cluster-cidr=10.43.0.0/16 >> ~/k3s_install_log.txt
+        K3S_KUBECONFIG_MODE="644" ~/k3s_install.sh --cluster-cidr=10.43.0.0/16 --flannel-backend=host-gw >> ~/k3s_install_log.txt
       args:
         chdir: "~"
         creates: /var/lib/rancher/k3s/server/node-token
@@ -116,7 +116,7 @@
   tasks:
     - name: Install K3s on nodes (takes a while).
       ansible.builtin.shell: >-
-        K3S_URL="https://{{ groups['control_plane'][0] }}:6443"
+        K3S_URL="https://{{ hostvars[groups['control_plane'][0]]['ansible_host'] }}:6443"
         K3S_TOKEN="{{ hostvars[groups['control_plane'][0]]['node_token'] }}"
         ~/k3s_install.sh >> ~/k3s_install_log.txt
       args:
@@ -127,6 +127,10 @@
   import_playbook: helm/helm.yml
   tags: ['helm']
 
+- name: Set up traefik.
+  import_playbook: traefik/traefik.yml
+  tags: ['traefik']
+
 - name: Set up Longhorn PVCs.
   import_playbook: longhorn/longhorn.yml
   tags: ['longhorn']
@@ -135,10 +139,6 @@
 # - name: Set up NFS Subdir External Provisioner.
 #   import_playbook: nfs/nfs.yml
 #   tags: ['nfs']
-
-- name: Set up traefik.
-  import_playbook: traefik/traefik.yml
-  tags: ['traefik']
 
 - name: Set up portainer.
   import_playbook: portainer/portainer.yml

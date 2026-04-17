@@ -14,6 +14,9 @@ All commands run from this directory (`ansible-setup/`).
 # Install/update external roles
 ansible-galaxy install -r requirements.yml --roles-path roles/ --force
 
+# Install required Ansible collections (one-time setup)
+ansible-galaxy collection install community.crypto kubernetes.core
+
 # Run a playbook
 ansible-playbook -i inventories/inventory.ini <playbook.yml>
 
@@ -58,12 +61,12 @@ Defined in `inventories/inventory.ini`. Group variables in `inventories/group_va
 
 | Group | Host | IP | Purpose |
 |-------|------|----|---------|
-| `docker` | `dockerpi` | .61 | Primary Docker/Home Assistant server |
-| `backup_raspberrypi` | `dockerpi_backup` | .71 | Backup Pi (Unbound, Pi-hole failover) |
-| `control_plane` | `node01` | .62 | K3s master |
-| `nodes` | `node02–04` | .63–.65 | K3s workers |
-| `storage` | `node03` | .64 | Longhorn storage |
-| `pikvms` | `pikvm` | .59 | KVM management (user: root, python3.13) |
+| `docker` | `dockerpi` | .2 | Primary Docker/Home Assistant server |
+| `backup_raspberrypi` | `dockerpi_backup` | .3 | Backup Pi (Unbound, Pi-hole failover) |
+| `control_plane` | `node01` | .20 | K3s master |
+| `nodes` | `node02–03` | .21–.22 | K3s workers |
+| `storage` | `node03` | .22 | Longhorn storage |
+| `pikvms` | `pikvm` | pikvm | KVM management (user: root, python3.13) |
 
 All Pi hosts use SSH key auth (`~/.ssh/<hostname>`) and `python3.11`.
 
@@ -78,15 +81,17 @@ All Pi hosts use SSH key auth (`~/.ssh/<hostname>`) and `python3.11`.
 
 ### Kubernetes manifests pattern
 
-Each K8s service under `raspberry-pi-playbooks/cluster/kubernetes/<service>/` has two files:
-- `<service>-template.yml` — raw manifest with Jinja2 variable placeholders (e.g., `{{ nhl_odds_postgres_password }}`)
-- `<service>.yml` — rendered output (committed, applied by playbook)
+Each K8s service under `raspberry-pi-playbooks/cluster/kubernetes/<service>/` follows this pattern:
+- `<service>-template.yml` — raw Jinja2 manifest template (e.g., `{{ nhl_odds_postgres_password }}`), rendered at deploy time via `lookup('template', ...)`
+- `<service>.yml` — the Ansible playbook that applies the template
+
+Templates are **never pre-rendered and committed**; Ansible renders them in-memory at runtime. All K8s playbooks run against `control_plane` and set `K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml` in their environment.
 
 Secrets and cluster variables come from `~/source/ansible-files/vars/cluster_vars.yml` (external, not in repo).
 
-Services with Kubernetes manifests: `traefik`, `longhorn`, `prometheus`, `nhl-odds`, `minecraft`, `codespace`, `dashboard`, `esphome`, `helm`, `nfs`, `pi-hole`, `portainer`.
+Currently active K8s services (tags in `raspberry-pi-cluster.yml`): `helm`, `traefik`, `longhorn`, `portainer`, `magic-mirror`, `esphome`, `metric-server`, `prometheus`, `nhl-odds`.
 
-Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains using `IngressRoute` CRDs (`traefik.io/v1alpha1`).
+Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains using `IngressRoute` CRDs (`traefik.io/v1alpha1`). It generates a self-signed wildcard cert for `*.kubecluster` using the `community.crypto` collection.
 
 ### Docker machine (dockerpi)
 

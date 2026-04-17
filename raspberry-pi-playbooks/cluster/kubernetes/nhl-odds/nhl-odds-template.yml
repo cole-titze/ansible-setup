@@ -7,7 +7,7 @@ metadata:
 type: Opaque
 stringData:
   postgres-password: "{{ nhl_odds_postgres_password }}"
-  odds-api-key: "{{ nhl_odds_odds_api_key }}"
+  odds-api-key: "{{ nhl_odds_api_key }}"
   api-backfill-key: "{{ nhl_odds_api_backfill_key }}"
   cloudflare-tunnel-token: "{{ nhl_odds_cloudflare_tunnel_token }}"
 
@@ -32,7 +32,7 @@ metadata:
   namespace: nhl-odds
 data:
   create-tables.sql: |
-    {{ lookup('url', 'https://raw.githubusercontent.com/cole-titze/nhl-odds/main/database/Scripts/CreateTables.sql') | indent(4) }}
+    {{ lookup('url', 'https://raw.githubusercontent.com/cole-titze/nhl-odds/main/database/Scripts/CreateTables.sql') | join('\n') | indent(4) }}
 
 ---
 # CloudNativePG Cluster — replaces plain Deployment + PVC
@@ -243,7 +243,7 @@ spec:
         - name: nhl-odds-frontend
           port: 80
   tls:
-    certResolver: default
+    secretName: local-cert
 
 ---
 # CronJob: Daily NHL data collection (3am CT) — replaces scheduler/daily-data-collection.sh

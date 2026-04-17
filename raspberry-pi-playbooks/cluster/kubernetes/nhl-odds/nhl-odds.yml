@@ -1,7 +1,7 @@
 ---
 # Required variables (set in group_vars or ansible-vault):
 #   nhl_odds_postgres_password
-#   nhl_odds_odds_api_key
+#   nhl_odds_api_key
 #   nhl_odds_api_backfill_key
 #
 # Optional backup restore:
@@ -15,8 +15,12 @@
   become: true
 
   vars:
+    ansible_files_path: "~/source/ansible-files"
     local_backup_path: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/nhl.dump"
     remote_backup_path: /tmp/nhl-odds-restore.dump
+
+  vars_files:
+    - "{{ ansible_files_path }}/vars/nhl_vars.yml"
 
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
@@ -45,12 +49,23 @@
         path: "{{ local_backup_path }}"
       register: backup_file
       delegate_to: localhost
+      become: false
 
     - name: Copy database backup to control plane
       ansible.builtin.copy:
         src: "{{ local_backup_path }}"
         dest: "{{ remote_backup_path }}"
         mode: '0644'
+      when: backup_file.stat.exists
+
+    - name: Wait for database pod to exist
+      ansible.builtin.shell: |
+        kubectl get pod -l cnpg.io/cluster=nhl-odds-database,role=primary -n nhl-odds --no-headers 2>/dev/null | wc -l
+      register: db_pod_count
+      until: db_pod_count.stdout | trim | int > 0
+      retries: 30
+      delay: 10
+      changed_when: false
       when: backup_file.stat.exists
 
     - name: Wait for database pod to be ready
