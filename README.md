@@ -67,6 +67,8 @@ Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
 | Traefik | `http://10.42.0.21:31498` | Ingress dashboard |
 | NHL Odds | `https://odds.nhlwager.com` | External (Cloudflare tunnel) |
 
+**Not currently deployed (commented out in playbook):** NFS Provisioner, Codespace, Folding at Home, Minecraft, Monero Miner, Dashboard, Nextcloud, Pi-hole
+
 ```bash
 # Full cluster setup (K3s, Helm, Longhorn, all services)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml

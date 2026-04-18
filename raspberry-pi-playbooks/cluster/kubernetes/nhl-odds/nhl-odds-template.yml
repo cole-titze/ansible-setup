@@ -468,3 +468,74 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+
+---
+# ServiceAccount + RBAC for the scheduler to create/delete Jobs
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nhl-odds-scheduler
+  namespace: nhl-odds
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nhl-odds-scheduler
+  namespace: nhl-odds
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nhl-odds-scheduler
+  namespace: nhl-odds
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nhl-odds-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: nhl-odds-scheduler
+    namespace: nhl-odds
+---
+# Scheduler: polls DB every minute for requested jobs and creates Kubernetes Jobs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nhl-odds-scheduler
+  namespace: nhl-odds
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-scheduler
+  template:
+    metadata:
+      labels:
+        app: nhl-odds-scheduler
+    spec:
+      serviceAccountName: nhl-odds-scheduler
+      containers:
+        - name: scheduler
+          image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
+          imagePullPolicy: Always
+          env:
+            - name: TZ
+              value: America/Chicago
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-secret
+                  key: postgres-password
+            - name: NHL_DATABASE_URL
+              value: "postgresql://postgres:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"

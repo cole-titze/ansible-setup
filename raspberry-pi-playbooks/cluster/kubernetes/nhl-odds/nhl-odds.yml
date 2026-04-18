@@ -127,4 +127,3 @@
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
         psql -U postgres -c "ALTER USER postgres WITH PASSWORD '{{ nhl_odds_postgres_password }}'"
       changed_when: false
-      when: backup_file.stat.exists
