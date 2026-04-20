@@ -23,6 +23,7 @@
         - /etc/systemd/system/k3s-agent.service
         - /var/lib/cni
         - /run/flannel
+        - /var/lib/longhorn
 
 
 - name: Clear Kubernetes Resources
