@@ -1,0 +1,15 @@
+---
+- name: Configure cluster maintenance (nightly image updates)
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "/home/{{ ansible_user }}/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Apply cluster maintenance manifests.
+      kubernetes.core.k8s:
+        definition: "{{ lookup('template', 'cluster-maintenance-template.yml') }}"
+        state: present

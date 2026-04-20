@@ -1,0 +1,41 @@
+---
+- name: Configure unattended upgrades on all Pis
+  hosts: raspberrypis,!pikvms
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Install unattended-upgrades
+      ansible.builtin.apt:
+        name:
+          - unattended-upgrades
+          - apt-listchanges
+        state: present
+        update_cache: true
+
+    - name: Configure unattended-upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Origins-Pattern {
+              "origin=Debian,codename=${distro_codename},label=Debian";
+              "origin=Debian,codename=${distro_codename},label=Debian-Security";
+              "origin=Raspbian,codename=${distro_codename},label=Raspbian";
+          };
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+        mode: '0644'
+
+    - name: Enable automatic upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: '0644'
+
+    - name: Enable and start unattended-upgrades service
+      ansible.builtin.systemd:
+        name: unattended-upgrades
+        enabled: true
+        state: started

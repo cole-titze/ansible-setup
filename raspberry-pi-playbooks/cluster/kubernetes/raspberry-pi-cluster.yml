@@ -190,6 +190,10 @@
   import_playbook: nhl-odds/nhl-odds.yml
   tags: ['nhl-odds']
 
+- name: Set up cluster maintenance (nightly image updates).
+  import_playbook: cluster-maintenance/cluster-maintenance.yml
+  tags: ['cluster-maintenance']
+
 # - name: Set up minecraft
 #   import_playbook: minecraft/minecraft.yml
 #   tags: ['minecraft']

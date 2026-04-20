@@ -1,0 +1,69 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cluster-maintenance
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nightly-updater
+  namespace: cluster-maintenance
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nightly-updater
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: nightly-updater
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nightly-updater
+subjects:
+  - kind: ServiceAccount
+    name: nightly-updater
+    namespace: cluster-maintenance
+---
+# Runs nightly at 3am CT (9am UTC). Restarts all deployments/daemonsets that use
+# imagePullPolicy: Always so they pick up new :latest images.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-image-updater
+  namespace: cluster-maintenance
+spec:
+  schedule: "0 4 * * *"
+  timeZone: "America/Chicago"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: nightly-updater
+          restartPolicy: OnFailure
+          containers:
+            - name: updater
+              image: bitnami/kubectl:latest
+              imagePullPolicy: Always
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  for ns in default home-assistant nhl-odds portainer; do
+                    echo "Restarting deployments in $ns"
+                    kubectl rollout restart deployment -n $ns 2>/dev/null || true
+                    kubectl rollout restart daemonset -n $ns 2>/dev/null || true
+                    kubectl rollout restart statefulset -n $ns 2>/dev/null || true
+                  done
+                  echo "Done"

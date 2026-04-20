@@ -255,6 +255,7 @@ metadata:
   namespace: nhl-odds
 spec:
   schedule: "0 3 * * *"
+  timeZone: "America/Chicago"
   jobTemplate:
     spec:
       template:
@@ -286,6 +287,7 @@ metadata:
   namespace: nhl-odds
 spec:
   schedule: "0 6 * * *"
+  timeZone: "America/Chicago"
   jobTemplate:
     spec:
       template:
@@ -322,6 +324,7 @@ metadata:
   namespace: nhl-odds
 spec:
   schedule: "15 6 * * *"
+  timeZone: "America/Chicago"
   jobTemplate:
     spec:
       template:
@@ -353,6 +356,7 @@ metadata:
   namespace: nhl-odds
 spec:
   schedule: "30 6 * * *"
+  timeZone: "America/Chicago"
   jobTemplate:
     spec:
       template:
@@ -384,6 +388,7 @@ metadata:
   namespace: nhl-odds
 spec:
   schedule: "0 1 * * *"
+  timeZone: "America/Chicago"
   jobTemplate:
     spec:
       template:
