@@ -32,7 +32,7 @@ subjects:
     name: nightly-updater
     namespace: cluster-maintenance
 ---
-# Runs nightly at 3am CT (9am UTC). Restarts all deployments/daemonsets that use
+# Runs nightly at 4am CT. Restarts all deployments/daemonsets that use
 # imagePullPolicy: Always so they pick up new :latest images.
 apiVersion: batch/v1
 kind: CronJob
