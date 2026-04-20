@@ -45,6 +45,7 @@ metadata:
 spec:
   instances: 2
   imageName: ghcr.io/cloudnative-pg/postgresql:17
+  enableSuperuserAccess: true
   superuserSecret:
     name: nhl-odds-superuser
   bootstrap:

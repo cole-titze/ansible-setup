@@ -69,20 +69,17 @@
       retries: 30
       delay: 10
       changed_when: false
-      when: backup_file.stat.exists
 
     - name: Wait for database pod to be ready
       ansible.builtin.shell: |
         kubectl wait --for=condition=ready pod -l cnpg.io/cluster=nhl-odds-database,role=primary -n nhl-odds --timeout=300s
       changed_when: false
-      when: backup_file.stat.exists
 
     - name: Get database pod name
       ansible.builtin.command: >
         kubectl get pod -n nhl-odds -l cnpg.io/cluster=nhl-odds-database,role=primary -o jsonpath='{.items[0].metadata.name}'
       register: db_pod_name
       changed_when: false
-      when: backup_file.stat.exists
 
     - name: Check if database already has data
       ansible.builtin.shell: >
@@ -126,4 +123,9 @@
       ansible.builtin.shell: >
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
         psql -U postgres -c "ALTER USER postgres WITH PASSWORD '{{ nhl_odds_postgres_password }}'"
+      changed_when: false
+
+    - name: Restart webapi and scheduler to pick up password
+      ansible.builtin.command: >
+        kubectl rollout restart deployment -n nhl-odds nhl-odds-webapi nhl-odds-scheduler
       changed_when: false

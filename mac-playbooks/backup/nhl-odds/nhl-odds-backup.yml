@@ -2,50 +2,30 @@
 - name: Backup NHL Odds database
   hosts: control_plane
   gather_facts: false
-  become: true
 
   vars:
-    local_backup_path: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/nhl.dump"
-    remote_backup_path: /tmp/nhl-odds-backup.dump
-
-  environment:
-    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+    local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
+    remote_backup_dir: /home/pi/backups/nhl-odds/
 
   tasks:
     - name: Ensure local backup directory exists
       ansible.builtin.file:
-        path: "{{ local_backup_path | dirname }}"
+        path: "{{ local_backup_dir }}"
         state: directory
         mode: "0755"
       delegate_to: localhost
+      run_once: true
 
-    - name: Get database pod name
-      ansible.builtin.command: >
-        kubectl get pod -n nhl-odds -l app=nhl-odds-database -o jsonpath='{.items[0].metadata.name}'
-      register: db_pod_name
+    - name: Get list of backup files on node
+      ansible.builtin.find:
+        paths: "{{ remote_backup_dir }}"
+        patterns: "nhl-*.dump"
+        file_type: file
+      register: backup_files
 
-    - name: Run pg_dump inside database pod
-      ansible.builtin.command: >
-        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
-        pg_dump --username=postgres --dbname=nhl --format=custom --file=/tmp/nhl-backup.dump
-
-    - name: Copy dump from pod to control plane
-      ansible.builtin.command: >
-        kubectl cp nhl-odds/{{ db_pod_name.stdout }}:/tmp/nhl-backup.dump {{ remote_backup_path }}
-
-    - name: Fetch backup to local machine
+    - name: Fetch backup files to local machine
       ansible.builtin.fetch:
-        src: "{{ remote_backup_path }}"
-        dest: "{{ local_backup_path }}"
-        flat: yes
-
-    - name: Clean up dump from pod
-      ansible.builtin.command: >
-        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
-        rm /tmp/nhl-backup.dump
-
-    - name: Clean up dump from control plane
-      ansible.builtin.file:
-        path: "{{ remote_backup_path }}"
-        state: absent
+        src: "{{ item.path }}"
+        dest: "{{ local_backup_dir }}"
+        flat: true
+      loop: "{{ backup_files.files }}"
