@@ -119,13 +119,56 @@
         state: absent
       when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
-    - name: Sync postgres password with secret
+    # Migration for clusters bootstrapped with owner=postgres: ensure nhl_app exists
+    # and owns the nhl database + all public-schema objects. For fresh clusters the
+    # role/ownership are already correct (CNPG bootstrap handles it via
+    # Cluster.bootstrap.initdb.owner), so each step below is a no-op.
+    - name: Check if nhl_app role exists
       ansible.builtin.shell: >
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
-        psql -U postgres -c "ALTER USER postgres WITH PASSWORD '{{ nhl_odds_postgres_password }}'"
+        psql -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='nhl_app'"
+      register: nhl_app_role
       changed_when: false
 
-    - name: Restart webapi and scheduler to pick up password
+    - name: Create nhl_app role
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -c "CREATE ROLE nhl_app WITH LOGIN PASSWORD '{{ nhl_odds_postgres_password }}'"
+      when: nhl_app_role.stdout | trim == ''
+
+    # REASSIGN OWNED can't be used here — postgres owns system objects it refuses to
+    # release. Walk public-schema objects explicitly instead; ALTER ... OWNER is a
+    # no-op when already owned by nhl_app.
+    - name: Transfer ownership of nhl database and public-schema objects to nhl_app
+      ansible.builtin.shell: |
+        kubectl exec -i -n nhl-odds {{ db_pod_name.stdout }} -- psql -U postgres -v ON_ERROR_STOP=1 -d nhl <<'PSQL'
+        ALTER DATABASE nhl OWNER TO nhl_app;
+        DO $$
+        DECLARE r RECORD;
+        BEGIN
+          FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+            EXECUTE format('ALTER TABLE public.%I OWNER TO nhl_app', r.tablename);
+          END LOOP;
+          FOR r IN SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public' LOOP
+            EXECUTE format('ALTER SEQUENCE public.%I OWNER TO nhl_app', r.sequence_name);
+          END LOOP;
+          FOR r IN SELECT viewname FROM pg_views WHERE schemaname = 'public' LOOP
+            EXECUTE format('ALTER VIEW public.%I OWNER TO nhl_app', r.viewname);
+          END LOOP;
+          FOR r IN SELECT matviewname FROM pg_matviews WHERE schemaname = 'public' LOOP
+            EXECUTE format('ALTER MATERIALIZED VIEW public.%I OWNER TO nhl_app', r.matviewname);
+          END LOOP;
+        END $$;
+        PSQL
+      changed_when: false
+
+    - name: Sync nhl_app password with secret
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -c "ALTER USER nhl_app WITH PASSWORD '{{ nhl_odds_postgres_password }}'"
+      changed_when: false
+
+    - name: Restart webapi and scheduler to pick up credentials
       ansible.builtin.command: >
         kubectl rollout restart deployment -n nhl-odds nhl-odds-webapi nhl-odds-scheduler
       changed_when: false

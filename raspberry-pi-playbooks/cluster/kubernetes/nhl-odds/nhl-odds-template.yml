@@ -6,21 +6,21 @@ metadata:
   namespace: nhl-odds
 type: Opaque
 stringData:
-  postgres-password: "{{ nhl_odds_postgres_password }}"
   odds-api-key: "{{ nhl_odds_api_key }}"
   api-backfill-key: "{{ nhl_odds_api_backfill_key }}"
   cloudflare-tunnel-token: "{{ nhl_odds_cloudflare_tunnel_token }}"
 
 ---
-# Secret for CloudNativePG superuser — CNPG requires 'username' + 'password' keys
+# App-user credentials. Everything (webapi, scheduler, cronjobs, backup) auths as nhl_app.
+# Also consumed by CNPG at bootstrap as the initial app user (see Cluster.bootstrap.initdb.secret).
 apiVersion: v1
 kind: Secret
 metadata:
-  name: nhl-odds-superuser
+  name: nhl-odds-app-credentials
   namespace: nhl-odds
 type: kubernetes.io/basic-auth
 stringData:
-  username: postgres
+  username: nhl_app
   password: "{{ nhl_odds_postgres_password }}"
 
 ---
@@ -45,13 +45,16 @@ metadata:
 spec:
   instances: 2
   imageName: ghcr.io/cloudnative-pg/postgresql:17
+  # enableSuperuserAccess stays true so ansible can still `psql -U postgres` via peer auth
+  # in-pod during deploys. CNPG auto-manages the superuser password in a generated secret;
+  # no component connects as postgres over the network.
   enableSuperuserAccess: true
-  superuserSecret:
-    name: nhl-odds-superuser
   bootstrap:
     initdb:
       database: nhl
-      owner: postgres
+      owner: nhl_app
+      secret:
+        name: nhl-odds-app-credentials
       postInitApplicationSQLRefs:
         configMapRefs:
           - name: nhl-odds-schema
@@ -96,10 +99,10 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nhl-odds-secret
-                  key: postgres-password
+                  name: nhl-odds-app-credentials
+                  key: password
             - name: NHL_DATABASE
-              value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+              value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
           livenessProbe:
             tcpSocket:
               port: 8080
@@ -273,10 +276,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-secret
-                      key: postgres-password
+                      name: nhl-odds-app-credentials
+                      key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Daily odds fetch — NextDayOdds (6am CT) — replaces scheduler/daily-odds-fetch.sh step 1
@@ -305,10 +308,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-secret
-                      key: postgres-password
+                      name: nhl-odds-app-credentials
+                      key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
                 - name: ODDS_API_KEY
                   valueFrom:
                     secretKeyRef:
@@ -342,10 +345,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-secret
-                      key: postgres-password
+                      name: nhl-odds-app-credentials
+                      key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
@@ -372,12 +375,12 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-secret
-                      key: postgres-password
+                      name: nhl-odds-app-credentials
+                      key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
 
-{% for host in groups['control_plane'] %}
+{% for host in groups['nodes'] %}
 ---
 # CronJob: Nightly database backup (1am CT) with 7-day retention — {{ host }}
 # Dumps land at /home/pi/backups/nhl-odds/ on each node for SFTP retrieval
@@ -405,15 +408,15 @@ spec:
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-secret
-                      key: postgres-password
+                      name: nhl-odds-app-credentials
+                      key: password
               command: ["/bin/sh", "-c"]
               args:
                 - |
                   set -e
                   mkdir -p /backups
                   BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
-                  pg_dump -h nhl-odds-database-rw -U postgres -Fc nhl > "$BACKUP_FILE"
+                  pg_dump -h nhl-odds-database-rw -U nhl_app -Fc nhl > "$BACKUP_FILE"
                   echo "Backup saved to $BACKUP_FILE"
                   find /backups -name "nhl-*.dump" -mtime +7 -delete
                   echo "Old backups pruned"
@@ -458,6 +461,8 @@ spec:
           args:
             - tunnel
             - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:20241
             - run
             - --token
             - $(TUNNEL_TOKEN)
@@ -467,6 +472,26 @@ spec:
                 secretKeyRef:
                   name: nhl-odds-secret
                   key: cloudflare-tunnel-token
+          ports:
+            - name: metrics
+              containerPort: 20241
+          # /ready returns 200 only when at least one tunnel connection is healthy.
+          # Restarts pods whose tunnel state has silently broken — the cause of
+          # recurring intermittent 502s even while pods reported Running.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
           resources:
             requests:
               cpu: "50m"
@@ -534,10 +559,10 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nhl-odds-secret
-                  key: postgres-password
+                  name: nhl-odds-app-credentials
+                  key: password
             - name: NHL_DATABASE_URL
-              value: "postgresql://postgres:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+              value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
           resources:
             requests:
               cpu: "50m"
