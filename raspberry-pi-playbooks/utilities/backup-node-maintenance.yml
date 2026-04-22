@@ -1,6 +1,6 @@
 ---
-- name: Configure staggered Docker node maintenance
-  hosts: docker
+- name: Configure staggered backup node maintenance
+  hosts: backup_raspberrypi
   gather_facts: false
   become: true
 
@@ -13,13 +13,11 @@
 
     - name: Configure logrotate for node logs
       ansible.builtin.copy:
-        dest: /etc/logrotate.d/docker-maintenance
+        dest: /etc/logrotate.d/backup-maintenance
         content: |
           /var/log/node-update.log
-          /var/log/portainer-update.log
-          /var/log/home-assistant-update.log
-          /var/log/home-assistant-backup.log
-          /var/log/pihole-update.log {
+          /var/log/pihole-update.log
+          /var/log/pihole-failover.log {
               weekly
               rotate 4
               compress

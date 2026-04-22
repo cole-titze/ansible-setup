@@ -3,10 +3,16 @@
 PRIMARY_IP="10.42.0.2"
 TIMEOUT=2
 
-if ping -c1 -W $TIMEOUT "$PRIMARY_IP" > /dev/null; then
-    echo "Primary is up. Disabling DHCP on backup..."
-    pihole -a disable-dhcp
+CURRENT=$(/usr/bin/pihole-FTL --config dhcp.active 2>/dev/null)
+
+if /bin/ping -c1 -W $TIMEOUT "$PRIMARY_IP" > /dev/null 2>&1; then
+    if [ "$CURRENT" = "true" ]; then
+        echo "Primary is up. Disabling DHCP on backup..."
+        /usr/bin/pihole-FTL --config dhcp.active false
+    fi
 else
-    echo "Primary is down. Enabling DHCP on backup..."
-    pihole -a enable-dhcp
+    if [ "$CURRENT" = "false" ]; then
+        echo "Primary is down. Enabling DHCP on backup..."
+        /usr/bin/pihole-FTL --config dhcp.active true
+    fi
 fi

@@ -116,3 +116,6 @@
         job: "/usr/local/bin/pihole-failover-check.sh >> /var/log/pihole-failover.log 2>&1"
         minute: "*/1"
         user: root
+
+- name: Apply staggered node maintenance (overrides raspberry-pi role cron)
+  import_playbook: ../utilities/backup-node-maintenance.yml
