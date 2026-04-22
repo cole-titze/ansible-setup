@@ -113,6 +113,6 @@
     - name: Add cron job to run DHCP failover check every 2 minutes
       cron:
         name: "Pi-hole DHCP failover watchdog"
-        job: "/usr/local/bin/pihole-failover-check.sh"
+        job: "/usr/local/bin/pihole-failover-check.sh >> /var/log/pihole-failover.log 2>&1"
         minute: "*/1"
         user: root

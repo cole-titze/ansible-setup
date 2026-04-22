@@ -194,6 +194,10 @@
   import_playbook: cluster-maintenance/cluster-maintenance.yml
   tags: ['cluster-maintenance']
 
+- name: Configure K3s node maintenance (staggered reboots).
+  import_playbook: ../../utilities/k8s-node-maintenance.yml
+  tags: ['node-maintenance']
+
 # - name: Set up minecraft
 #   import_playbook: minecraft/minecraft.yml
 #   tags: ['minecraft']

@@ -1,0 +1,41 @@
+---
+- name: Configure staggered K3s node maintenance
+  hosts: cluster
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Remove generic nightly update cron (installed by raspberry-pi role)
+      ansible.builtin.cron:
+        name: "Nightly system update"
+        state: absent
+        user: root
+
+    - name: Deploy K8s-aware update script
+      ansible.builtin.copy:
+        src: files/k8s-node-update.sh
+        dest: /usr/local/bin/k8s-node-update.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure logrotate for node update log
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/k8s-maintenance
+        content: |
+          /var/log/k8s-node-update.log {
+              weekly
+              rotate 4
+              compress
+              missingok
+              notifempty
+          }
+        mode: '0644'
+
+    - name: Add staggered nightly update cron
+      ansible.builtin.cron:
+        name: "K3s node nightly update"
+        job: "/usr/local/bin/k8s-node-update.sh >> /var/log/k8s-node-update.log 2>&1"
+        minute: "{{ update_cron_minute }}"
+        hour: "{{ update_cron_hour }}"
+        user: root

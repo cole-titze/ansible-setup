@@ -135,6 +135,18 @@ spec:
     app: nhl-odds-webapi
 
 ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nhl-odds-webapi
+  namespace: nhl-odds
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-webapi
+
+---
 # The frontend image has a Docker-specific DNS resolver (127.0.0.11) baked into
 # its nginx.conf. This ConfigMap overrides it to work in Kubernetes.
 apiVersion: v1
@@ -200,6 +212,18 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 30
           resources:
             requests:
               cpu: "50m"
@@ -230,6 +254,18 @@ spec:
       protocol: TCP
   selector:
     app: nhl-odds-frontend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nhl-odds-frontend
+  namespace: nhl-odds
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-frontend
 
 ---
 apiVersion: traefik.io/v1alpha1
@@ -499,6 +535,18 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudflared
+  namespace: nhl-odds
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloudflared
 
 ---
 # ServiceAccount + RBAC for the scheduler to create/delete Jobs

@@ -1,0 +1,38 @@
+---
+- name: Configure staggered Docker node maintenance
+  hosts: docker:backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Remove generic nightly update cron (installed by raspberry-pi role)
+      ansible.builtin.cron:
+        name: "Nightly system update"
+        state: absent
+        user: root
+
+    - name: Configure logrotate for node logs
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/docker-maintenance
+        content: |
+          /var/log/node-update.log
+          /var/log/portainer-update.log
+          /var/log/home-assistant-update.log
+          /var/log/home-assistant-backup.log
+          /var/log/pihole-update.log
+          /var/log/pihole-failover.log {
+              weekly
+              rotate 4
+              compress
+              missingok
+              notifempty
+          }
+        mode: '0644'
+
+    - name: Add staggered nightly update cron
+      ansible.builtin.cron:
+        name: "Docker node nightly update"
+        job: "/usr/local/bin/update-system.sh >> /var/log/node-update.log 2>&1"
+        minute: "{{ update_cron_minute }}"
+        hour: "{{ update_cron_hour }}"
+        user: root

@@ -60,10 +60,10 @@ spec:
                 - -c
                 - |
                   set -e
+                  # Only restart Deployments — StatefulSets hit the CNPG database
+                  # and force an unnecessary primary switchover.
                   for ns in default home-assistant nhl-odds portainer; do
                     echo "Restarting deployments in $ns"
                     kubectl rollout restart deployment -n $ns 2>/dev/null || true
-                    kubectl rollout restart daemonset -n $ns 2>/dev/null || true
-                    kubectl rollout restart statefulset -n $ns 2>/dev/null || true
                   done
                   echo "Done"
