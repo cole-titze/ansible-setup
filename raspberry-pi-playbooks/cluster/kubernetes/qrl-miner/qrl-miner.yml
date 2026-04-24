@@ -1,0 +1,59 @@
+---
+- name: Configure QRL Miner
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "/home/{{ ansible_user }}/go/bin:{{ ansible_env.PATH }}"
+
+  tasks:
+    - name: Create qrl mining namespace.
+      kubernetes.core.k8s:
+        name: qrl-miner
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Deploy QRL Miner on Kubernetes as a Deployment
+      kubernetes.core.k8s:
+        state: present
+        definition: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: qrl-miner
+            namespace: qrl-miner
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: qrl-miner
+            template:
+              metadata:
+                labels:
+                  app: qrl-miner
+              spec:
+                containers:
+                  - name: qrl-miner
+                    image: ghcr.io/cole-titze/containers/qrl-miner:latest
+                    imagePullPolicy: Always
+                    securityContext:
+                      privileged: true
+                    env:
+                      - name: WALLET_ADDRESS
+                        value: "{{ qrl_wallet_address }}"
+                      - name: MINING_POOL
+                        value: "qrl.herominers.com:1166"
+                    resources:
+                      requests:
+                        cpu: "1000m"
+                        memory: "4Gi"
+                      limits:
+                        cpu: "2000m"
+                        memory: "8Gi"

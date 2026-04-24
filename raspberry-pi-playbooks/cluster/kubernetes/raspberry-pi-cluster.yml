@@ -153,26 +153,25 @@
   import_playbook: longhorn/longhorn.yml
   tags: ['longhorn']
 
-# Currently using longhorn so not needed
-# - name: Set up NFS Subdir External Provisioner.
-#   import_playbook: nfs/nfs.yml
-#   tags: ['nfs']
+- name: Set up NFS Subdir External Provisioner.
+  import_playbook: nfs/nfs.yml
+  tags: ['never', 'nfs']
 
 - name: Set up portainer.
   import_playbook: portainer/portainer.yml
   tags: ['portainer']
 
-# - name: Set up codespace.
-#   import_playbook: codespace/codespace.yml
-#   tags: ['codespace']
+- name: Set up codespace.
+  import_playbook: codespace/codespace.yml
+  tags: ['never', 'codespace']
 
 - name: Set up magic mirror.
   import_playbook: magic-mirror/magic-mirror.yml
   tags: ['magic-mirror']
 
-# - name: Set up folding at home.
-#   import_playbook: folding-at-home/folding-at-home.yml
-#   tags: ['folding-at-home']
+- name: Set up folding at home.
+  import_playbook: folding-at-home/folding-at-home.yml
+  tags: ['never', 'folding-at-home']
 
 - name: Set up esphome.
   import_playbook: esphome/esphome.yml
@@ -198,26 +197,26 @@
   import_playbook: ../../utilities/k8s-node-maintenance.yml
   tags: ['node-maintenance']
 
-# - name: Set up minecraft
-#   import_playbook: minecraft/minecraft.yml
-#   tags: ['minecraft']
+- name: Set up minecraft
+  import_playbook: minecraft/minecraft.yml
+  tags: ['never', 'minecraft']
 
-# Not needed, just a fun test
-# - name: Set up monero miner.
-#   import_playbook: monero-miner/monero-miner.yml
-#   tags: ['monero-miner']
+- name: Set up QRL Miner.
+  import_playbook: qrl-miner/qrl-miner.yml
+  tags: ['never', 'qrl-miner']
 
-# Not needed with prometheus/grafana
-# - name: Set up Dashboard.
-#   import_playbook: dashboard/dashboard.yml
-#   tags: ['dashboard']
+- name: Set up monero miner.
+  import_playbook: monero-miner/monero-miner.yml
+  tags: ['never', 'monero-miner']
 
-# Don't have a need for nextcloud yet
-# - name: Set up nextcloud
-#   import_playbook: nextcloud/nextcloud.yml
-#   tags: ['nextcloud']
+- name: Set up Dashboard.
+  import_playbook: dashboard/dashboard.yml
+  tags: ['never', 'dashboard']
 
-# Pihole is currently running on separate machine today.
-# - name: Set up pi hole.
-#   import_playbook: pi-hole/pi-hole.yml
-#   tags: ['pi-hole']
+- name: Set up nextcloud
+  import_playbook: nextcloud/nextcloud.yml
+  tags: ['never', 'nextcloud']
+
+- name: Set up pi hole.
+  import_playbook: pi-hole/pi-hole.yml
+  tags: ['never', 'pi-hole']

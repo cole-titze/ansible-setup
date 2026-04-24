@@ -100,8 +100,6 @@ Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
 | Traefik | `http://10.42.0.21:31498` | Ingress dashboard |
 | NHL Odds | `https://odds.nhlwager.com` | External (Cloudflare tunnel) |
 
-**Not currently deployed (commented out in playbook):** NFS Provisioner, Codespace, Folding at Home, Minecraft, Monero Miner, Dashboard, Nextcloud, Pi-hole
-
 ```bash
 # Full cluster setup (K3s, Helm, Longhorn, all services)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml
@@ -115,6 +113,26 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 # Uninstall K3s
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/uninstall-kubernetes.yml
 ```
+
+#### Optional services
+
+These are defined in the playbook but tagged `never` so they don't run by default. Deploy them explicitly with their tag:
+
+```bash
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml -t <tag>
+```
+
+| Tag | Service | Notes |
+|-----|---------|-------|
+| `qrl-miner` | QRL Miner | Requires `qrl_wallet_address` in `cluster_vars.yml` |
+| `monero-miner` | Monero Miner | Requires `monero_wallet_address` in `cluster_vars.yml` |
+| `minecraft` | Minecraft Server | |
+| `nextcloud` | Nextcloud | |
+| `pi-hole` | Pi-hole | Currently runs on dockerpi_backup instead |
+| `dashboard` | Kubernetes Dashboard | Superseded by Prometheus/Grafana |
+| `nfs` | NFS Provisioner | Superseded by Longhorn |
+| `codespace` | Codespace | |
+| `folding-at-home` | Folding@Home | |
 
 #### NHL Odds
 
