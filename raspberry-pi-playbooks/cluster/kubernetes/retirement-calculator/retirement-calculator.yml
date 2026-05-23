@@ -1,0 +1,21 @@
+---
+- name: Configure Retirement Calculator
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Create retirement-calculator namespace.
+      kubernetes.core.k8s:
+        name: retirement-calculator
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Apply retirement-calculator manifests.
+      kubernetes.core.k8s:
+        definition: "{{ lookup('template', 'retirement-calculator-template.yml') }}"
+        state: present
