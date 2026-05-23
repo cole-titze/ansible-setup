@@ -1,0 +1,32 @@
+---
+- name: Uninstall Docker retirement-calculator
+  hosts: docker
+  become: true
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
+  tasks:
+    - name: Stop and remove retirement-calculator containers
+      community.docker.docker_compose_v2:
+        project_src: "/home/{{ ansible_user }}/retirement-calculator"
+        state: absent
+        remove_volumes: true
+      ignore_errors: true
+
+    - name: Remove retirement-calculator update cron job
+      ansible.builtin.cron:
+        name: "Update retirement-calculator container"
+        state: absent
+        user: root
+
+    - name: Remove retirement-calculator update script
+      ansible.builtin.file:
+        path: /usr/local/bin/retirement-calculator-update.sh
+        state: absent
+
+    - name: Remove retirement-calculator directory
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/retirement-calculator"
+        state: absent
