@@ -7,5 +7,6 @@
   vars_files:
     - "{{ ansible_files_path }}/vars/cluster_vars.yml"
     - "{{ ansible_files_path }}/vars/nhl_vars.yml"
+    - "{{ ansible_files_path }}/vars/retirement_vars.yml"
   roles:
     - docker

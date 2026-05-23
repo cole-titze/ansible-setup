@@ -189,6 +189,10 @@
   import_playbook: nhl-odds/nhl-odds.yml
   tags: ['nhl-odds']
 
+- name: Set up Retirement Calculator.
+  import_playbook: retirement-calculator/retirement-calculator.yml
+  tags: ['retirement-calculator']
+
 - name: Set up cluster maintenance (nightly image updates).
   import_playbook: cluster-maintenance/cluster-maintenance.yml
   tags: ['cluster-maintenance']
