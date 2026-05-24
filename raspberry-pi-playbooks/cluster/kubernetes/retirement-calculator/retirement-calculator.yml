@@ -1,8 +1,17 @@
 ---
+# Required variables (set in retirement_vars.yml):
+#   retirement_calculator_cloudflare_tunnel_token
+
 - name: Configure Retirement Calculator
   hosts: control_plane
   gather_facts: false
   become: true
+
+  vars:
+    ansible_files_path: "~/source/ansible-files"
+
+  vars_files:
+    - "{{ ansible_files_path }}/vars/retirement_vars.yml"
 
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
