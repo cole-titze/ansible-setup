@@ -1,6 +1,6 @@
 ---
 - name: Backup NHL Odds database
-  hosts: control_plane
+  hosts: node03
   gather_facts: false
 
   vars:
