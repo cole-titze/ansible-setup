@@ -10,13 +10,14 @@
   vars:
     ansible_files_path: "~/source/ansible-files"
 
-  vars_files:
-    - "{{ ansible_files_path }}/vars/retirement_vars.yml"
-
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
   tasks:
+    - name: Load retirement vars.
+      ansible.builtin.include_vars:
+        file: "{{ ansible_files_path }}/vars/retirement_vars.yml"
+
     - name: Create retirement-calculator namespace.
       kubernetes.core.k8s:
         name: retirement-calculator
