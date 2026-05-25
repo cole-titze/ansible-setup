@@ -55,7 +55,7 @@ spec:
       serviceAccountName: traefik
       containers:
         - name: traefik
-          image: traefik:v3.0
+          image: traefik:v3.7
           imagePullPolicy: Always
           args:
             - "--api.dashboard=true"
