@@ -44,7 +44,7 @@ metadata:
   namespace: nhl-odds
 spec:
   instances: 2
-  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
   # enableSuperuserAccess stays true so ansible can still `psql -U postgres` via peer auth
   # in-pod during deploys. CNPG auto-manages the superuser password in a generated secret;
   # no component connects as postgres over the network.
