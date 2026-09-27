@@ -125,6 +125,18 @@
       command: kubectl taint nodes {{ control_node.stdout }} node-role.kubernetes.io/control-plane:NoExecute --overwrite
       when: "'NoExecute' not in node_taints.stdout"
 
+    - name: Check if the control plane node is already cordoned
+      command: kubectl get node {{ control_node.stdout }} -o jsonpath='{.spec.unschedulable}'
+      register: node_unschedulable
+      changed_when: false
+
+    # Cordoning (in addition to the taints above) makes Longhorn show this node as
+    # intentionally excluded rather than "down", since it never runs Longhorn's
+    # manager/csi-plugin pods (see nodeAffinity in storage/longhorn.yml).
+    - name: Cordon the control plane node
+      command: kubectl cordon {{ control_node.stdout }}
+      when: node_unschedulable.stdout != "true"
+
 
 - name: Configure the worker nodes.
   hosts: nodes
