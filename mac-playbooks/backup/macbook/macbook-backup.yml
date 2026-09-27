@@ -10,10 +10,15 @@
         dest: "kube"
 
     icloud_base_dir: "{{ lookup('env', 'HOME') }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
-    timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
-    icloud_backup_dir: "{{ icloud_base_dir }}/backup_{{ timestamp }}"
 
   tasks:
+    # set_fact evaluates the pipe lookup once and stores the result; a plain `vars:` entry
+    # re-evaluates lookup('pipe', ...) on every reference, which previously produced two
+    # different timestamps (and two backup directories) a second apart within one run.
+    - name: Pin the backup timestamp for this run
+      ansible.builtin.set_fact:
+        icloud_backup_dir: "{{ icloud_base_dir }}/backup_{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
+
     - name: Ensure iCloud backup directory exists
       ansible.builtin.file:
         path: "{{ icloud_backup_dir }}"
