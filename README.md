@@ -144,6 +144,7 @@ Deployed on Kubernetes in the `nhl-odds` namespace. Requires the following secre
 | `nhl_odds_api_key` | odds-api.com API key |
 | `nhl_odds_api_backfill_key` | Backfill API key |
 | `nhl_odds_cloudflare_tunnel_token` | Cloudflare tunnel token for external access |
+| `nhl_odds_admin_api_key` | Key required in the `X-Admin-Key` header to start jobs via the webapi's `POST /api/Admin/Start*` endpoints (e.g. `openssl rand -hex 32`) |
 
 **Backup/restore:**
 
