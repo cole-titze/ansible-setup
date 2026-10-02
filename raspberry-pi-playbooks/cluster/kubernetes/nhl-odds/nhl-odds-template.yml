@@ -9,6 +9,8 @@ stringData:
   odds-api-key: "{{ nhl_odds_api_key }}"
   api-backfill-key: "{{ nhl_odds_api_backfill_key }}"
   cloudflare-tunnel-token: "{{ nhl_odds_cloudflare_tunnel_token }}"
+  # Required in the X-Admin-Key header by the webapi's job-starting admin endpoints
+  admin-api-key: "{{ nhl_odds_admin_api_key }}"
 
 ---
 # App-user credentials. Everything (webapi, scheduler, cronjobs, backup) auths as nhl_app.
@@ -103,6 +105,11 @@ spec:
                   key: password
             - name: NHL_DATABASE
               value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-secret
+                  key: admin-api-key
           livenessProbe:
             tcpSocket:
               port: 8080
