@@ -36,7 +36,7 @@ ansible-playbook -i inventories/inventory.ini <playbook.yml> -vvv
 # OS setup for all Pis
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/setup/raspberry-pi-setup.yml
 
-# Docker host (Portainer, NHL Odds, Unbound) — requires secrets file
+# Docker host (Portainer, Unbound, Retirement Calculator) — requires secrets file
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-machine/docker-setup.yml
 
 # Full K3s cluster (K3s, Helm, Longhorn, all services)

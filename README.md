@@ -77,7 +77,7 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 
 ### Docker machine (dockerpi)
 
-Requires secrets in `~/source/ansible-files/vars/cluster_vars.yml` and `nhl_vars.yml`.
+Requires secrets in `~/source/ansible-files/vars/cluster_vars.yml` and `retirement_vars.yml`. (NHL Odds moved to Kubernetes; remove a leftover Docker install with `raspberry-pi-playbooks/docker-machine/uninstall-nhl-odds.yml`.)
 
 ```bash
 # Install Docker + deploy active containers (Portainer, Home Assistant, Unbound, Pi-hole)
