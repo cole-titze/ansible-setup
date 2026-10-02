@@ -311,6 +311,9 @@ spec:
                   value: America/Chicago
                 - name: RUN_MODE
                   value: NhlAdd
+                # The NHL API returns 429s when requests aren't spaced out
+                - name: THROTTLE_TIME_MS
+                  value: "250"
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
