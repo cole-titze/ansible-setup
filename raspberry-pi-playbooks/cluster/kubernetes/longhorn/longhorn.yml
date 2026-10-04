@@ -23,6 +23,9 @@
       kubernetes.core.helm:
         name: longhorn
         chart_ref: longhorn/longhorn
+        # Upgrade one minor at a time (e.g. 1.11 -> 1.12 -> 1.13); see the k8s-major-upgrade skill.
+        chart_version: "1.12.1"
+        update_repo_cache: true
         release_namespace: longhorn-system
         create_namespace: false
         state: present
@@ -34,6 +37,8 @@
             defaultReplicaCount: 3
             replicaSoftAntiAffinity: true
             defaultDataPath: "/var/lib/longhorn"
+            # Live-upgrade volume engines after a Longhorn upgrade, one volume per node at a time.
+            concurrentAutomaticEngineUpgradePerNodeLimit: 1
 
     - name: Exclude control-plane node from Longhorn manager DaemonSet
       ansible.builtin.shell: |
