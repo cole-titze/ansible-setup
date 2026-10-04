@@ -89,10 +89,14 @@ spec:
                   matchLabels:
                     app: nhl-odds-webapi
                 topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: webapi
           image: ghcr.io/cole-titze/nhl-odds/webapi:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - containerPort: 8080
           env:
@@ -216,10 +220,14 @@ spec:
                   matchLabels:
                     app: nhl-odds-frontend
                 topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: frontend
           image: ghcr.io/cole-titze/nhl-odds/frontend:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -310,10 +318,14 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
           containers:
             - name: entry
               image: ghcr.io/cole-titze/nhl-odds/entry:latest
               imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
               env:
                 - name: TZ
                   value: America/Chicago
@@ -345,10 +357,14 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
           containers:
             - name: entry
               image: ghcr.io/cole-titze/nhl-odds/entry:latest
               imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
               env:
                 - name: TZ
                   value: America/Chicago
@@ -382,10 +398,14 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
           containers:
             - name: entry
               image: ghcr.io/cole-titze/nhl-odds/entry:latest
               imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
               env:
                 - name: TZ
                   value: America/Chicago
@@ -414,10 +434,14 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
           containers:
             - name: predictor
               image: ghcr.io/cole-titze/nhl-odds/predictor:latest
               imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
               env:
                 - name: TZ
                   value: America/Chicago
@@ -504,9 +528,13 @@ spec:
                   matchLabels:
                     app: cloudflared
                 topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:latest
+          securityContext:
+            allowPrivilegeEscalation: false
           args:
             - tunnel
             - --no-autoupdate
@@ -610,10 +638,14 @@ spec:
         app: nhl-odds-scheduler
     spec:
       serviceAccountName: nhl-odds-scheduler
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: scheduler
           image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
           env:
             - name: TZ
               value: America/Chicago
