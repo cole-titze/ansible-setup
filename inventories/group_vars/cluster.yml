@@ -1,0 +1,5 @@
+---
+# K3s version installed on every cluster node. Upgrade one minor at a time
+# (server first, then agents) - see the k8s-major-upgrade skill. The install
+# tasks only run on fresh nodes, so bumping this does not upgrade a live cluster.
+k3s_version: v1.35.9+k3s1
