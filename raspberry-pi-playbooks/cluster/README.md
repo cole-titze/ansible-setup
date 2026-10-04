@@ -8,7 +8,7 @@ K3s cluster running on Raspberry Pis (node01-04).
 # Full cluster setup
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml
 
-# Single service (available tags: helm, longhorn, traefik, portainer, codespace, magic-mirror, folding-at-home, esphome, metric-server, prometheus, minecraft)
+# Single service (available tags: helm, longhorn, traefik, portainer, codespace, magic-mirror, folding-at-home, esphome, prometheus, minecraft)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml -t <tag>
 
 # Reset all workloads

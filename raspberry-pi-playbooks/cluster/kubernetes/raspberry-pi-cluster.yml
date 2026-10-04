@@ -189,10 +189,6 @@
   import_playbook: esphome/esphome.yml
   tags: ['esphome']
 
-- name: Set up metric server.
-  import_playbook: metric-server/metric-server.yml
-  tags: ['metric-server']
-
 - name: Set up Prometheus.
   import_playbook: prometheus/prometheus.yml
   tags: ['prometheus']
