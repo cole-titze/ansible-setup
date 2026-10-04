@@ -14,15 +14,19 @@ spec:
       labels:
         app: retirement-calculator
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: retirement-calculator
-                topologyKey: kubernetes.io/hostname
+      # Hard-spread replicas across worker nodes. Cordoned/tainted nodes (node01, a node being
+      # drained) don't count, so drains and rolling updates still work with only two workers.
+      # Only enforced at scheduling time: after a drain, a rollout restart rebalances.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: retirement-calculator
+          matchLabelKeys:
+            - pod-template-hash
       containers:
         - name: retirement-calculator
           image: ghcr.io/cole-titze/retirement-calculator:latest
@@ -120,15 +124,19 @@ spec:
       labels:
         app: cloudflared
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: cloudflared
-                topologyKey: kubernetes.io/hostname
+      # Hard-spread replicas across worker nodes. Cordoned/tainted nodes (node01, a node being
+      # drained) don't count, so drains and rolling updates still work with only two workers.
+      # Only enforced at scheduling time: after a drain, a rollout restart rebalances.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: cloudflared
+          matchLabelKeys:
+            - pod-template-hash
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:latest

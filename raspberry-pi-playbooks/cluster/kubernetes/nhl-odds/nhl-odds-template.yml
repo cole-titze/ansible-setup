@@ -63,6 +63,10 @@ spec:
             key: create-tables.sql
   storage:
     size: 10Gi
+  # Primary and replica must never share a node. During a drain the evicted instance waits
+  # (Pending) until its node is uncordoned instead of doubling up on the other worker.
+  affinity:
+    podAntiAffinityType: required
 
 ---
 apiVersion: apps/v1
@@ -80,15 +84,19 @@ spec:
       labels:
         app: nhl-odds-webapi
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: nhl-odds-webapi
-                topologyKey: kubernetes.io/hostname
+      # Hard-spread replicas across worker nodes. Cordoned/tainted nodes (node01, a node being
+      # drained) don't count, so drains and rolling updates still work with only two workers.
+      # Only enforced at scheduling time: after a drain, a rollout restart rebalances.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: nhl-odds-webapi
+          matchLabelKeys:
+            - pod-template-hash
       securityContext:
         runAsNonRoot: true
       containers:
@@ -211,15 +219,19 @@ spec:
       labels:
         app: nhl-odds-frontend
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: nhl-odds-frontend
-                topologyKey: kubernetes.io/hostname
+      # Hard-spread replicas across worker nodes. Cordoned/tainted nodes (node01, a node being
+      # drained) don't count, so drains and rolling updates still work with only two workers.
+      # Only enforced at scheduling time: after a drain, a rollout restart rebalances.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: nhl-odds-frontend
+          matchLabelKeys:
+            - pod-template-hash
       securityContext:
         runAsNonRoot: true
       containers:
@@ -519,15 +531,19 @@ spec:
       labels:
         app: cloudflared
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: cloudflared
-                topologyKey: kubernetes.io/hostname
+      # Hard-spread replicas across worker nodes. Cordoned/tainted nodes (node01, a node being
+      # drained) don't count, so drains and rolling updates still work with only two workers.
+      # Only enforced at scheduling time: after a drain, a rollout restart rebalances.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app: cloudflared
+          matchLabelKeys:
+            - pod-template-hash
       securityContext:
         runAsNonRoot: true
       containers:
