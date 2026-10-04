@@ -31,6 +31,8 @@
       kubernetes.core.helm:
         name: portainer
         chart_ref: portainer/portainer
+        chart_version: "245.1.0"
+        update_repo_cache: true
         release_namespace: "{{ portainer_namespace }}"
         create_namespace: false
         state: present
