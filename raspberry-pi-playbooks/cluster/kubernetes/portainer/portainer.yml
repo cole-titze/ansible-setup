@@ -58,6 +58,15 @@
     - name: Create Portainer IngressRoute
       ansible.builtin.shell: |
         kubectl apply -f - <<EOF
+        # The Portainer backend serves a self-signed cert; skip verification for this route only.
+        apiVersion: traefik.io/v1alpha1
+        kind: ServersTransport
+        metadata:
+          name: portainer-insecure
+          namespace: {{ portainer_namespace }}
+        spec:
+          insecureSkipVerify: true
+        ---
         apiVersion: traefik.io/v1alpha1
         kind: IngressRoute
         metadata:
@@ -73,6 +82,7 @@
                 - name: portainer
                   port: 9443
                   scheme: https
+                  serversTransport: portainer-insecure
           tls:
             secretName: local-cert
         EOF

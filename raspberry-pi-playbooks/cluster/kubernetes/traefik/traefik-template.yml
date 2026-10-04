@@ -11,7 +11,12 @@ metadata:
   name: traefik
 rules:
   - apiGroups: [""]
-    resources: [services, endpoints, secrets]
+    # Matches Traefik's reference RBAC (docs/content/reference/dynamic-configuration/kubernetes-crd-rbac.yml).
+    resources: [services, endpoints, secrets, configmaps, nodes]
+    verbs: [get, list, watch]
+  # Traefik v3 discovers backend pods via EndpointSlices; without this every route 404s.
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
     verbs: [get, list, watch]
   - apiGroups: [networking.k8s.io]
     resources: [ingresses, ingressclasses]
@@ -37,6 +42,15 @@ subjects:
   - kind: ServiceAccount
     name: traefik
     namespace: traefik
+---
+# Standard Ingresses (e.g. Grafana/Prometheus from kube-prometheus-stack) use ingressClassName: traefik;
+# without this IngressClass Traefik ignores them.
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller
 ---
 apiVersion: apps/v1
 kind: DaemonSet
