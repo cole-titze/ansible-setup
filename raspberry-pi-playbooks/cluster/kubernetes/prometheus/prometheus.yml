@@ -22,6 +22,9 @@
       kubernetes.core.helm:
         name: cluster-monitoring
         chart_ref: prometheus-community/kube-prometheus-stack
+        # Helm doesn't upgrade CRDs: apply the matching prometheus-operator CRDs first (see k8s-major-upgrade skill).
+        chart_version: "91.9.0"
+        update_repo_cache: true
         release_namespace: default
         create_namespace: true
         state: present
