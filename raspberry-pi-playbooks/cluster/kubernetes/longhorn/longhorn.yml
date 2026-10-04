@@ -24,7 +24,7 @@
         name: longhorn
         chart_ref: longhorn/longhorn
         # Upgrade one minor at a time (e.g. 1.11 -> 1.12 -> 1.13); see the k8s-major-upgrade skill.
-        chart_version: "1.12.1"
+        chart_version: "1.13.0"
         update_repo_cache: true
         release_namespace: longhorn-system
         create_namespace: false
