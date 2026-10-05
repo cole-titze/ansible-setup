@@ -123,10 +123,11 @@ spec:
           env:
             - name: TZ
               value: America/Chicago
-            # With no CPU limit .NET sees every core, and Server GC would make one heap per core.
-            # One heap keeps memory where it was under the old 250m limit.
-            - name: DOTNET_GCHeapCount
-              value: "1"
+            # With no CPU limit .NET sees every core and Server GC sizes itself for all of them
+            # (measured: ~120Mi heap even with GCHeapCount=1). Workstation GC suits this low-traffic
+            # API and keeps the heap at ~75-85Mi, leaving room for the 10k-unit cache under 256Mi.
+            - name: DOTNET_gcServer
+              value: "0"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
