@@ -715,6 +715,9 @@ spec:
       app: nhl-odds-webapi
   podMetricsEndpoints:
     - port: metrics
+      # prometheus-net's route label is "endpoint", which collides with the target label of the
+      # same name (the port); without this it's renamed exported_endpoint and the dashboard loses it.
+      honorLabels: true
 ---
 # Public request rate and status codes at the Cloudflare tunnel
 apiVersion: monitoring.coreos.com/v1
