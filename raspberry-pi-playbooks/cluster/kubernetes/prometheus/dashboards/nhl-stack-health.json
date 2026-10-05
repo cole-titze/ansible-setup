@@ -58,8 +58,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Public requests / min",
-      "description": "All real-user traffic, counted at the Cloudflare tunnel (pages, assets and API calls).",
+      "title": "Public requests",
+      "description": "All real-user traffic in the selected range, counted at the Cloudflare tunnel (pages, assets, API).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -76,9 +76,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(cloudflared_tunnel_total_requests{namespace=\"nhl-odds\", container=\"cloudflared\"}[5m])) * 60",
+          "expr": "sum(increase(cloudflared_tunnel_total_requests{namespace=\"nhl-odds\", container=\"cloudflared\"}[$__range]))",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -93,7 +95,7 @@
               }
             ]
           },
-          "decimals": 1
+          "decimals": 0
         },
         "overrides": []
       },
@@ -106,7 +108,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "auto",
         "justifyMode": "auto",
         "orientation": "auto"
@@ -115,8 +117,8 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "API requests / min",
-      "description": "Requests handled by the webapi (proxied from nginx /api and /mcp).",
+      "title": "API requests",
+      "description": "Requests handled by the webapi in the selected range.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -133,9 +135,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[5m])) * 60",
+          "expr": "sum(increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[$__range]))",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -150,7 +154,7 @@
               }
             ]
           },
-          "decimals": 1
+          "decimals": 0
         },
         "overrides": []
       },
@@ -163,7 +167,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "auto",
         "justifyMode": "auto",
         "orientation": "auto"
@@ -173,7 +177,7 @@
       "id": 4,
       "type": "stat",
       "title": "API p50 response",
-      "description": "Median API response time over the last 5 minutes (MCP excluded).",
+      "description": "Median API response time over the selected range (MCP excluded).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -190,9 +194,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])))",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -227,7 +233,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "auto",
         "justifyMode": "auto",
         "orientation": "auto"
@@ -237,7 +243,7 @@
       "id": 5,
       "type": "stat",
       "title": "API p95 response",
-      "description": "95th percentile API response time over the last 5 minutes (MCP excluded).",
+      "description": "95th percentile API response time over the selected range (MCP excluded).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -254,9 +260,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])))",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -291,7 +299,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "auto",
         "justifyMode": "auto",
         "orientation": "auto"
@@ -318,9 +326,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\", code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[5m])), 1e-9)",
+          "expr": "sum(increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\", code=~\"5..\"}[$__range])) / clamp_min(sum(increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[$__range])), 1e-9)",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -356,7 +366,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "auto",
         "justifyMode": "auto",
         "orientation": "auto"
@@ -366,7 +376,7 @@
       "id": 7,
       "type": "stat",
       "title": "Tunnel errors (5xx)",
-      "description": "5xx responses seen by real users, including nginx/frontend failures.",
+      "description": "5xx responses seen by real users in the selected range, including nginx/frontend failures.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -383,9 +393,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(cloudflared_tunnel_response_by_code{namespace=\"nhl-odds\", container=\"cloudflared\", status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(cloudflared_tunnel_total_requests{namespace=\"nhl-odds\", container=\"cloudflared\"}[5m])), 1e-9)",
+          "expr": "sum(increase(cloudflared_tunnel_response_by_code{namespace=\"nhl-odds\", container=\"cloudflared\", status_code=~\"5..\"}[$__range])) / clamp_min(sum(increase(cloudflared_tunnel_total_requests{namespace=\"nhl-odds\", container=\"cloudflared\"}[$__range])), 1e-9)",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -421,7 +433,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "auto",
         "justifyMode": "auto",
         "orientation": "auto"
@@ -430,8 +442,8 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Request rate",
-      "description": "Requests per minute.",
+      "title": "Requests per hour",
+      "description": "Rolling 1-hour request counts.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -448,7 +460,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(cloudflared_tunnel_total_requests{namespace=\"nhl-odds\", container=\"cloudflared\"}[5m])) * 60",
+          "expr": "sum(increase(cloudflared_tunnel_total_requests{namespace=\"nhl-odds\", container=\"cloudflared\"}[1h]))",
           "legendFormat": "Public (tunnel)",
           "refId": "A"
         },
@@ -457,7 +469,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[5m])) * 60",
+          "expr": "sum(increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[1h]))",
           "legendFormat": "API (webapi)",
           "refId": "B"
         },
@@ -466,7 +478,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(traefik_router_requests_total{router=~\".*nhl-odds.*\"}[5m])) * 60",
+          "expr": "sum(increase(traefik_router_requests_total{router=~\".*nhl-odds.*\"}[1h]))",
           "legendFormat": "LAN (Traefik)",
           "refId": "C"
         }
@@ -518,7 +530,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "API response time",
+      "title": "API response time (1h windows)",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -536,7 +548,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -545,7 +557,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
           "legendFormat": "p95",
           "refId": "B"
         },
@@ -554,7 +566,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -615,8 +627,8 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "p95 response time by endpoint",
-      "description": "Which API routes are slow. Gaps mean the route had no traffic in that window.",
+      "title": "p95 response time by endpoint (1h windows)",
+      "description": "Which API routes are slow. Gaps mean the route had no traffic in that hour.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -633,7 +645,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
           "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
@@ -686,8 +698,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Requests by endpoint",
-      "description": "Requests per minute per API route.",
+      "title": "Requests per hour by endpoint",
+      "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -704,7 +716,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (endpoint) (rate(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[5m])) * 60",
+          "expr": "sum by (endpoint) (increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\"}[1h]))",
           "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
@@ -888,7 +900,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Responses by status (public)",
-      "description": "Responses per minute at the tunnel, by HTTP status.",
+      "description": "Rolling 1-hour response counts at the tunnel, by HTTP status.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -905,7 +917,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (status_code) (rate(cloudflared_tunnel_response_by_code{namespace=\"nhl-odds\", container=\"cloudflared\"}[5m])) * 60",
+          "expr": "sum by (status_code) (increase(cloudflared_tunnel_response_by_code{namespace=\"nhl-odds\", container=\"cloudflared\"}[1h]))",
           "legendFormat": "{{status_code}}",
           "refId": "A"
         }
@@ -954,7 +966,7 @@
     {
       "id": 15,
       "type": "timeseries",
-      "title": "LAN response time (Traefik)",
+      "title": "LAN response time (Traefik, 1h windows)",
       "description": "Only nhl-odds.kubecluster (LAN) traffic passes through Traefik; public traffic does not.",
       "datasource": {
         "type": "prometheus",
@@ -972,7 +984,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(traefik_router_request_duration_seconds_bucket{router=~\".*nhl-odds.*\"}[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(traefik_router_request_duration_seconds_bucket{router=~\".*nhl-odds.*\"}[1h])))",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -981,7 +993,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(traefik_router_request_duration_seconds_bucket{router=~\".*nhl-odds.*\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(traefik_router_request_duration_seconds_bucket{router=~\".*nhl-odds.*\"}[1h])))",
           "legendFormat": "p95",
           "refId": "B"
         }
