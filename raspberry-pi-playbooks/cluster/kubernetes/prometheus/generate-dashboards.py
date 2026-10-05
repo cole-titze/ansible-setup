@@ -117,8 +117,8 @@ def dashboard(uid, title, tags, panels, desc, refresh="1m", time_from="now-24h",
 
 # ---------------------------------------------------------------- NHL stack health
 API = 'namespace="nhl-odds", container="webapi"'
-# MCP is long-lived streaming and unmatched routes (endpoint="") are 404 probes; both skew latency
-API_ROUTES = API + ', endpoint!~"mcp.*|"'
+# MCP (endpoint="/mcp/") can be long-lived streaming and unmatched routes (endpoint="") are 404 probes; both skew latency
+API_ROUTES = API + ', endpoint!~"/?mcp.*|"'
 CF = 'namespace="nhl-odds", container="cloudflared"'
 LAN = 'router=~".*nhl-odds.*"'
 DBSEL = 'namespace="nhl-odds", pod=~"nhl-odds-database-.*"'

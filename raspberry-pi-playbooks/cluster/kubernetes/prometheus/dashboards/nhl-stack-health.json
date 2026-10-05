@@ -194,7 +194,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[$__range])))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -260,7 +260,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[$__range])))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -548,7 +548,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[1h])))",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -557,7 +557,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[1h])))",
           "legendFormat": "p95",
           "refId": "B"
         },
@@ -566,7 +566,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[1h])))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -645,7 +645,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[1h])))",
+          "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(http_request_duration_seconds_bucket{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[1h])))",
           "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
@@ -786,7 +786,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sort_desc(sum by (endpoint) (increase(http_request_duration_seconds_sum{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])))",
+          "expr": "sort_desc(sum by (endpoint) (increase(http_request_duration_seconds_sum{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[$__range])))",
           "legendFormat": "{{endpoint}}",
           "refId": "A",
           "instant": true,
@@ -848,7 +848,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sort_desc(sum by (endpoint) (increase(http_request_duration_seconds_sum{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])) / sum by (endpoint) (increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"mcp.*|\"}[$__range])))",
+          "expr": "sort_desc(sum by (endpoint) (increase(http_request_duration_seconds_sum{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[$__range])) / sum by (endpoint) (increase(http_request_duration_seconds_count{namespace=\"nhl-odds\", container=\"webapi\", endpoint!~\"/?mcp.*|\"}[$__range])))",
           "legendFormat": "{{endpoint}}",
           "refId": "A",
           "instant": true,
