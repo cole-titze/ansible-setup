@@ -15,6 +15,10 @@
   import_playbook: nhl-odds/nhl-odds-backup.yml
   tags: ['nhl-odds']
 
+- name: Backup Grafana database.
+  import_playbook: grafana/grafana-backup.yml
+  tags: ['grafana']
+
 # Not using minecraft kubernetes yet
 # - name: Backup minecraft.
 #   import_playbook: minecraft/minecraft-backup.yml

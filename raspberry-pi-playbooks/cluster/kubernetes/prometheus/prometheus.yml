@@ -155,6 +155,78 @@
                     - port: 9500
                       protocol: TCP
 
+    # Nightly copy of grafana.db (stars, preferences, UI-made dashboards; provisioned dashboards
+    # are in git) to /home/pi/backups/grafana on whichever node runs Grafana, keeping 30 days.
+    # mac-playbooks/backup/grafana pulls them off both workers. The RWO volume can only be mounted
+    # on Grafana's node, hence the podAffinity; SQLite's backup API makes a consistent online copy.
+    - name: Schedule Grafana database backup
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: grafana-db-backup
+            namespace: default
+          spec:
+            schedule: "30 1 * * *"
+            timeZone: "America/Chicago"
+            concurrencyPolicy: Forbid
+            jobTemplate:
+              spec:
+                backoffLimit: 3
+                template:
+                  spec:
+                    restartPolicy: OnFailure
+                    affinity:
+                      podAffinity:
+                        requiredDuringSchedulingIgnoredDuringExecution:
+                          - topologyKey: kubernetes.io/hostname
+                            labelSelector:
+                              matchLabels:
+                                app.kubernetes.io/name: grafana
+                                app.kubernetes.io/instance: cluster-monitoring
+                    containers:
+                      - name: backup
+                        image: python:3-alpine
+                        env:
+                          - name: TZ
+                            value: America/Chicago
+                        command: ["/bin/sh", "-c"]
+                        args:
+                          - |
+                            set -e
+                            python3 - <<'EOF'
+                            import datetime, os, sqlite3
+                            dst = f"/backups/grafana-{datetime.date.today()}.db"
+                            src = sqlite3.connect("file:/var/lib/grafana/grafana.db?mode=ro", uri=True)
+                            out = sqlite3.connect(dst + ".tmp")
+                            src.backup(out)
+                            assert out.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+                            out.close()
+                            src.close()
+                            os.chmod(dst + ".tmp", 0o644)
+                            os.replace(dst + ".tmp", dst)
+                            print(f"Backup saved to {dst}")
+                            EOF
+                            find /backups -name "grafana-*.db" -mtime +30 -delete
+                            echo "Old backups pruned"
+                        volumeMounts:
+                          - name: grafana-storage
+                            mountPath: /var/lib/grafana
+                            readOnly: true
+                          - name: backup-storage
+                            mountPath: /backups
+                    volumes:
+                      - name: grafana-storage
+                        persistentVolumeClaim:
+                          claimName: cluster-monitoring-grafana
+                          readOnly: true
+                      - name: backup-storage
+                        hostPath:
+                          path: /home/pi/backups/grafana
+                          type: DirectoryOrCreate
+
     # The Grafana sidecar loads any ConfigMap labeled grafana_dashboard=1. The definition is one
     # Jinja expression because Ansible (<2.19) would otherwise turn the templated JSON string into a dict.
     - name: Deploy Grafana dashboards
