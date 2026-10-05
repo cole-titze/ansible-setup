@@ -120,6 +120,9 @@ spec:
             allowPrivilegeEscalation: false
           ports:
             - containerPort: 8080
+            # Prometheus metrics (prometheus-net), kept off the Service so nginx/Cloudflare can't reach it
+            - name: metrics
+              containerPort: 9091
           env:
             - name: TZ
               value: America/Chicago
@@ -694,3 +697,52 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+
+---
+# Prometheus scrapes (kube-prometheus-stack only selects monitors labeled release=cluster-monitoring).
+# Per-route request rate/latency from the webapi; public traffic bypasses Traefik, so this is the
+# only place real-user response times are measured.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: nhl-odds-webapi
+  namespace: nhl-odds
+  labels:
+    release: cluster-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: nhl-odds-webapi
+  podMetricsEndpoints:
+    - port: metrics
+---
+# Public request rate and status codes at the Cloudflare tunnel
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cloudflared
+  namespace: nhl-odds
+  labels:
+    release: cluster-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: cloudflared
+  podMetricsEndpoints:
+    - port: metrics
+---
+# CNPG's built-in exporter (cnpg_* metrics); written by hand since the Cluster's enablePodMonitor is deprecated
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: nhl-odds-database
+  namespace: nhl-odds
+  labels:
+    release: cluster-monitoring
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: nhl-odds-database
+      cnpg.io/podRole: instance
+  podMetricsEndpoints:
+    - port: metrics

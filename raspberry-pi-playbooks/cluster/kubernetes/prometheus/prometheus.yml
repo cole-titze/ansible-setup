@@ -37,6 +37,18 @@
           grafana:
             image:
               pullPolicy: Always
+            # Keeps stars, preferences and UI-made dashboards across the nightly restarts.
+            # Recreate: the RWO Longhorn volume can't attach to old and new pods at once.
+            persistence:
+              enabled: true
+              storageClassName: longhorn
+              size: 1Gi
+            deploymentStrategy:
+              type: Recreate
+            grafana.ini:
+              dashboards:
+                # Sidecar writes each ConfigMap key to /tmp/dashboards (see "Deploy Grafana dashboards" below)
+                default_home_dashboard_path: /tmp/dashboards/nhl-stack-health.json
             service:
               type: NodePort
               nodePort: 30300
@@ -52,9 +64,26 @@
                 - hosts:
                     - grafana.kubecluster
 
+          # node01 carries a NoExecute control-plane taint the chart's default toleration misses
+          prometheus-node-exporter:
+            tolerations:
+              - operator: Exists
+
           prometheus:
             image:
               pullPolicy: Always
+            # Without a volume Prometheus loses all history on every restart
+            prometheusSpec:
+              retention: 15d
+              retentionSize: 8GB
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: longhorn
+                    accessModes: ["ReadWriteOnce"]
+                    resources:
+                      requests:
+                        storage: 10Gi
             service:
               type: ClusterIP
             ingress:
@@ -68,3 +97,72 @@
               tls:
                 - hosts:
                     - prometheus.kubecluster
+
+    # kube-prometheus-stack only picks up monitors labeled release=cluster-monitoring.
+    # The nhl-odds PodMonitors live in nhl-odds/nhl-odds-template.yml.
+    - name: Scrape Traefik and Longhorn
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          - apiVersion: monitoring.coreos.com/v1
+            kind: ServiceMonitor
+            metadata:
+              name: traefik
+              namespace: traefik
+              labels:
+                release: cluster-monitoring
+            spec:
+              selector:
+                matchLabels:
+                  app: traefik
+              endpoints:
+                - port: admin
+                  path: /metrics
+          - apiVersion: monitoring.coreos.com/v1
+            kind: ServiceMonitor
+            metadata:
+              name: longhorn
+              namespace: longhorn-system
+              labels:
+                release: cluster-monitoring
+            spec:
+              selector:
+                matchLabels:
+                  app: longhorn-manager
+              endpoints:
+                - port: manager
+          # Longhorn's chart NetworkPolicy only admits its own pods to the manager; policies are
+          # additive, so this lets Prometheus scrape :9500 without loosening anything else.
+          - apiVersion: networking.k8s.io/v1
+            kind: NetworkPolicy
+            metadata:
+              name: longhorn-manager-prometheus
+              namespace: longhorn-system
+            spec:
+              podSelector:
+                matchLabels:
+                  app: longhorn-manager
+              policyTypes: [Ingress]
+              ingress:
+                - from:
+                    - namespaceSelector:
+                        matchLabels:
+                          kubernetes.io/metadata.name: default
+                      podSelector:
+                        matchLabels:
+                          prometheus: cluster-monitoring-kube-pr-prometheus
+                  ports:
+                    - port: 9500
+                      protocol: TCP
+
+    # The Grafana sidecar loads any ConfigMap labeled grafana_dashboard=1. The definition is one
+    # Jinja expression because Ansible (<2.19) would otherwise turn the templated JSON string into a dict.
+    - name: Deploy Grafana dashboards
+      kubernetes.core.k8s:
+        state: present
+        definition: >-
+          {{ {'apiVersion': 'v1', 'kind': 'ConfigMap',
+              'metadata': {'name': 'grafana-dashboard-' ~ (item | basename | splitext | first),
+                           'namespace': 'default', 'labels': {'grafana_dashboard': '1'}},
+              'data': {item | basename: lookup('file', item)}} }}
+      loop: "{{ query('fileglob', 'dashboards/*.json') }}"

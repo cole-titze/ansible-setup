@@ -80,6 +80,11 @@ spec:
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
             - "--entrypoints.websecure.http.tls=true"
+            # Prometheus metrics on the admin entrypoint (:8080/metrics); per-router labels so each
+            # site's request rate/latency is separable. Finer buckets than the 0.1/0.3/1.2/5 default.
+            - "--metrics.prometheus=true"
+            - "--metrics.prometheus.addRoutersLabels=true"
+            - "--metrics.prometheus.buckets=0.01,0.025,0.05,0.1,0.25,0.5,1,2.5,5"
           ports:
             - name: web
               containerPort: 80
@@ -104,6 +109,8 @@ kind: Service
 metadata:
   name: traefik
   namespace: traefik
+  labels:
+    app: traefik  # selected by the traefik ServiceMonitor in prometheus/prometheus.yml
 spec:
   selector:
     app: traefik
