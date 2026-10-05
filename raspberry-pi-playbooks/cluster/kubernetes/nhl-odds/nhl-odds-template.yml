@@ -67,6 +67,19 @@ spec:
   # (Pending) until its node is uncordoned instead of doubling up on the other worker.
   affinity:
     podAntiAffinityType: required
+  # The ~1.1GB DB stays cached under the 2Gi limit (shared_buffers + OS page cache).
+  # The request covers Postgres's non-reclaimable footprint with headroom. No CPU limit.
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "1.25Gi"
+    limits:
+      memory: "2Gi"
+  postgresql:
+    parameters:
+      shared_buffers: "512MB"         # Postgres's own page cache, ~25% of the limit
+      effective_cache_size: "1536MB"  # planner hint: shared_buffers + OS cache expected within the limit
+      work_mem: "16MB"                # per sort/hash step, so big predictor/nhl-add queries sort in memory
 
 ---
 apiVersion: apps/v1
@@ -110,6 +123,10 @@ spec:
           env:
             - name: TZ
               value: America/Chicago
+            # With no CPU limit .NET sees every core, and Server GC would make one heap per core.
+            # One heap keeps memory where it was under the old 250m limit.
+            - name: DOTNET_GCHeapCount
+              value: "1"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -134,8 +151,7 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
-            limits:
-              cpu: "250m"
+            limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
               memory: "256Mi"
 
 ---
@@ -258,8 +274,7 @@ spec:
             requests:
               cpu: "50m"
               memory: "64Mi"
-            limits:
-              cpu: "100m"
+            limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
               memory: "128Mi"
           volumeMounts:
             - name: nginx-config
@@ -589,8 +604,7 @@ spec:
             requests:
               cpu: "50m"
               memory: "64Mi"
-            limits:
-              cpu: "100m"
+            limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
               memory: "128Mi"
 
 ---

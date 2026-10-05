@@ -175,8 +175,7 @@ spec:
             requests:
               cpu: "50m"
               memory: "64Mi"
-            limits:
-              cpu: "100m"
+            limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
               memory: "128Mi"
 
 ---
