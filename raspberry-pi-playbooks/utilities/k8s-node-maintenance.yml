@@ -35,7 +35,7 @@
     - name: Add staggered nightly update cron
       ansible.builtin.cron:
         name: "K3s node nightly update"
-        job: "/usr/local/bin/k8s-node-update.sh >> /var/log/k8s-node-update.log 2>&1"
+        job: "/usr/local/bin/k8s-node-update.sh{{ ' --reboot' if inventory_hostname in groups['control_plane'] else '' }} >> /var/log/k8s-node-update.log 2>&1"
         minute: "{{ update_cron_minute }}"
         hour: "{{ update_cron_hour }}"
         user: root

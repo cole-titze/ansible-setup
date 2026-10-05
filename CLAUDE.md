@@ -89,7 +89,7 @@ Templates are **never pre-rendered and committed**; Ansible renders them in-memo
 
 Secrets and cluster variables come from `~/source/ansible-files/vars/cluster_vars.yml` (external, not in repo).
 
-Currently active K8s services (tags in `raspberry-pi-cluster.yml`): `helm`, `traefik`, `longhorn`, `portainer`, `magic-mirror`, `esphome`, `prometheus` (metrics API comes from K3s's built-in metrics-server), `nhl-odds`.
+Currently active K8s services (tags in `raspberry-pi-cluster.yml`): `helm`, `traefik`, `longhorn`, `portainer`, `magic-mirror`, `esphome`, `prometheus` (metrics API comes from K3s's built-in metrics-server), `nhl-odds`, `kured` (drained one-at-a-time worker reboots, 2:00-2:55 CT).
 
 Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains using `IngressRoute` CRDs (`traefik.io/v1alpha1`). It generates a self-signed wildcard cert for `*.kubecluster` using the `community.crypto` collection.
 

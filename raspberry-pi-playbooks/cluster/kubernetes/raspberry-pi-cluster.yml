@@ -206,9 +206,13 @@
   import_playbook: cluster-maintenance/cluster-maintenance.yml
   tags: ['cluster-maintenance']
 
-- name: Configure K3s node maintenance (staggered reboots).
+- name: Configure K3s node maintenance (staggered apt upgrades).
   import_playbook: ../../utilities/k8s-node-maintenance.yml
   tags: ['node-maintenance']
+
+- name: Set up kured (one-at-a-time drained reboots).
+  import_playbook: kured/kured.yml
+  tags: ['kured']
 
 - name: Set up minecraft
   import_playbook: minecraft/minecraft.yml

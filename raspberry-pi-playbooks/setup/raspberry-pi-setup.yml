@@ -4,3 +4,14 @@
   become: true
   roles:
     - raspberry-pi
+
+  post_tasks:
+    # The role always adds a 2:00 "update + unconditional reboot" cron. These hosts have their own
+    # staggered update crons (utilities/*-maintenance.yml), so the role's cron would reboot the
+    # whole cluster at once. Remove it again after every role run.
+    - name: Remove the role's generic nightly update cron
+      ansible.builtin.cron:
+        name: "Nightly system update"
+        user: root
+        state: absent
+      when: inventory_hostname in groups['cluster'] + groups['docker'] + groups['backup_raspberrypi']

@@ -1,0 +1,49 @@
+---
+# kured: reboots worker nodes one at a time when /var/run/reboot-required exists (created by the
+# unattended-upgrades kernel hook). Flow per node: take the cluster-wide lock, cordon, drain, reboot,
+# wait Ready, uncordon, release the lock. Draining the node with the CNPG primary makes the operator
+# switch over to the replica first, so the DB move is graceful.
+# The apt upgrades themselves run from k8s-node-update.sh (utilities/k8s-node-maintenance.yml) at
+# 1:15/1:30, which no longer reboots workers. node01 gets no kured pod (control-plane taints,
+# no toleration here) and reboots itself at 3:30.
+- name: Deploy kured
+  hosts: control_plane
+  become: true
+  gather_facts: false
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Add kured Helm repository
+      kubernetes.core.helm_repository:
+        name: kubereboot
+        repo_url: "https://kubereboot.github.io/charts"
+        state: present
+
+    - name: Deploy / upgrade kured via Helm
+      kubernetes.core.helm:
+        name: kured
+        chart_ref: kubereboot/kured
+        chart_version: "6.1.0"
+        update_repo_cache: true
+        release_namespace: kube-system
+        state: present
+
+        values:
+          configuration:
+            # 2:00-2:55 CT: after the 1 AM backups and apt runs, done before 3 AM nhl-add
+            startTime: "2:00"
+            endTime: "2:55"
+            timeZone: "America/Chicago"
+            period: "5m"
+            # Covers the CNPG switchover + evictions. If a drain still fails, skip the reboot
+            # rather than force it; kured retries the next period/night.
+            drainTimeout: "15m"
+            forceReboot: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
