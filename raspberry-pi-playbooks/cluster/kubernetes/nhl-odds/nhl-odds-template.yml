@@ -128,7 +128,8 @@ spec:
               value: America/Chicago
             # With no CPU limit .NET sees every core and Server GC sizes itself for all of them
             # (measured: ~120Mi heap even with GCHeapCount=1). Workstation GC suits this low-traffic
-            # API and keeps the heap at ~75-85Mi, leaving room for the 10k-unit cache under 256Mi.
+            # API and keeps the heap at ~75-85Mi idle. MCP get_all_teams serializes ~1.9MB per call and
+            # pushed the heap to the ~192Mi default cap (75% of 256Mi), causing GC pauses, hence 512Mi.
             - name: DOTNET_gcServer
               value: "0"
             - name: POSTGRES_PASSWORD
@@ -156,7 +157,7 @@ spec:
               cpu: "100m"
               memory: "128Mi"
             limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
-              memory: "256Mi"
+              memory: "512Mi"
 
 ---
 apiVersion: v1
