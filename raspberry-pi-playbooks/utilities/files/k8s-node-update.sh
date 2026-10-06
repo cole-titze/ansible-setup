@@ -6,6 +6,8 @@
 # full-upgrade (not upgrade) so new kernel/firmware packages that pull in new dependencies
 # (linux-image-rpi-*, rpi-eeprom) are installed instead of kept back.
 set -e
+# root's cron PATH is /usr/bin:/bin, which has no reboot (it lives in /usr/sbin)
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get full-upgrade -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
