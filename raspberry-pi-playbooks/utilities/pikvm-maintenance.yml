@@ -1,0 +1,67 @@
+---
+# Nightly PiKVM OS update. PiKVM runs Arch with a read-only root, so it's excluded from
+# auto-updates.yml (unattended-upgrades) and uses pikvm-update from a systemd timer instead (no cron).
+# The script reboots only when an update needs it; the log survives reboots in KVMD's persistent storage.
+- name: Configure nightly PiKVM update
+  hosts: pikvms
+  gather_facts: false
+
+  tasks:
+    - name: Make the root filesystem writable
+      ansible.builtin.command: rw
+      changed_when: false
+
+    - name: Install update script and timer
+      block:
+        - name: Deploy update script
+          ansible.builtin.copy:
+            src: files/pikvm-nightly-update.sh
+            dest: /usr/local/bin/pikvm-nightly-update.sh
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Deploy service
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/pikvm-nightly-update.service
+            content: |
+              [Unit]
+              Description=Nightly PiKVM OS update
+              Wants=network-online.target
+              After=network-online.target
+
+              [Service]
+              Type=oneshot
+              ExecStart=/usr/local/bin/pikvm-nightly-update.sh
+            mode: '0644'
+
+        - name: Deploy timer
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/pikvm-nightly-update.timer
+            content: |
+              [Unit]
+              Description=Nightly PiKVM OS update
+
+              [Timer]
+              OnCalendar=*-*-* {{ update_cron_hour }}:{{ update_cron_minute }} America/Chicago
+
+              [Install]
+              WantedBy=timers.target
+            mode: '0644'
+
+        - name: Enable timer
+          ansible.builtin.systemd:
+            name: pikvm-nightly-update.timer
+            enabled: true
+            state: started
+            daemon_reload: true
+      always:
+        # A timer that fires while / is writable (archlinux-keyring-wkd-sync) leaves gpg daemons
+        # running from /etc/pacman.d/gnupg, which makes / "busy"; stop them and retry.
+        - name: Make the root filesystem read-only again
+          ansible.builtin.shell: gpgconf --homedir /etc/pacman.d/gnupg --kill all; ro
+          register: ro_result
+          until: ro_result.rc == 0
+          retries: 12
+          delay: 10
+          changed_when: false
