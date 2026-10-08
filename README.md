@@ -61,6 +61,9 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/b
 
 # Apply staggered maintenance to K3s cluster nodes
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml -t node-maintenance
+
+# Nightly PiKVM update (systemd timer; reboots only when an update needs it)
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/pikvm-maintenance.yml
 ```
 
 **Logs** (rotated weekly, 4 weeks retained):
@@ -74,6 +77,7 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 | `/var/log/home-assistant-backup.log` | dockerpi |
 | `/var/log/pihole-update.log` | dockerpi, dockerpi_backup |
 | `/var/log/pihole-failover.log` | dockerpi_backup |
+| `/var/lib/kvmd/pst/data/pikvm-update.log` | pikvm (last 2000 lines kept; `/var/log` is tmpfs there) |
 
 ### Docker machine (dockerpi)
 
@@ -168,6 +172,10 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/s
 Helper scripts (need `chmod +x` first):
 - `raspberry-pi-playbooks/utilities/scripts/Deploy.sh` — full cluster deploy
 - `raspberry-pi-playbooks/utilities/scripts/Uninstall.sh` — uninstall K3s cluster
+
+### New Mac setup
+
+Follow [`mac-playbooks/macbook-setup.md`](mac-playbooks/macbook-setup.md). Its **Start here** section installs Claude Code, which then works through the rest of the runbook.
 
 ### Mac backups
 

@@ -8,6 +8,18 @@
         dest: "ssh"
       - src: "{{ lookup('env', 'HOME') }}/.kube"
         dest: "kube"
+      # Claude Code memories and settings only; skills live in the claude-skills repo
+      - src: "{{ lookup('env', 'HOME') }}/.claude"
+        dest: "claude"
+        filters:
+          - "--prune-empty-dirs"
+          - "--include=settings.json"
+          - "--include=CLAUDE.md"
+          - "--include=keybindings.json"
+          - "--include=projects/"
+          - "--include=projects/*/"
+          - "--include=projects/*/memory/***"
+          - "--exclude=*"
 
     icloud_base_dir: "{{ lookup('env', 'HOME') }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
 
@@ -31,7 +43,9 @@
         dest: "{{ icloud_backup_dir }}/{{ item.dest }}/"
         archive: true
         recursive: true
-        rsync_opts:
+        rsync_opts: "{{ common_rsync_opts + (item.filters | default([])) }}"
+      vars:
+        common_rsync_opts:
           - "--no-specials"
           - "--no-devices"
           - "--exclude=*.sock"
