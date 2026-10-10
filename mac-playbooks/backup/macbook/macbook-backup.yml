@@ -73,7 +73,7 @@
         deletable_backups: >-
           {{
             sorted_backups[1:]
-            | selectattr('mtime', 'lt', (ansible_date_time.epoch | int) - 2592000)
+            | selectattr('mtime', 'lt', (ansible_facts['date_time']['epoch'] | int) - 2592000)
             | list
           }}
 
