@@ -18,7 +18,7 @@
         - "cgroup_memory=1"
         - "cgroup_enable=memory"
       notify: reboot-pi
-      when: ansible_distribution == 'Debian'
+      when: ansible_facts['distribution'] == 'Debian'
 
     - name: Download K3s install script.
       ansible.builtin.get_url:

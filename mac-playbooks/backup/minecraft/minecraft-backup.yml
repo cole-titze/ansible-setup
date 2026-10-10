@@ -11,7 +11,7 @@
   environment:
     # The location of the kubeconfig file on the master.
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-    PATH: "~/go/bin:{{ ansible_env.PATH }}"
+    PATH: "~/go/bin:{{ ansible_facts['env']['PATH'] }}"
 
   tasks:
     - name: Get Minecraft Pod Name
@@ -29,7 +29,7 @@
     - name: Define variables
       set_fact:
         backup_dir: "/tmp/minecraft_backup"
-        archive_name: "minecraft_backup_{{ ansible_date_time.iso8601_basic_short }}.tar.gz"
+        archive_name: "minecraft_backup_{{ ansible_facts['date_time']['iso8601_basic_short'] }}.tar.gz"
 
     - name: Pause for 5 seconds
       pause:
