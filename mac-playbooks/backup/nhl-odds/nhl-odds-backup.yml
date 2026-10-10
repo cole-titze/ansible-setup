@@ -29,3 +29,23 @@
         dest: "{{ local_backup_dir }}"
         flat: true
       loop: "{{ backup_files.files }}"
+
+    # Dumps grow to ~1.7 GB with shift charts and goal replays; keep the newest 15 in iCloud
+    - name: Find local backups
+      ansible.builtin.find:
+        paths: "{{ local_backup_dir }}"
+        patterns: "nhl-*.dump"
+        file_type: file
+      register: local_backups
+      delegate_to: localhost
+      run_once: true
+
+    - name: Remove all but the newest 15 local backups (names are dated)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (local_backups.files | sort(attribute='path', reverse=true))[15:] }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      delegate_to: localhost
+      run_once: true
