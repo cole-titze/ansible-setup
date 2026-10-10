@@ -452,6 +452,53 @@ spec:
                   value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
 
 ---
+# CronJob: Lineup projections article snapshot (every 30 min, 10am-11:30pm CT) — LineupSnapshot
+# Saves NHL.com's lineup article whenever its text changes; it's rewritten daily, so this is its only history
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-entry-lineup-snapshot
+  namespace: nhl-odds
+spec:
+  schedule: "*/30 10-23 * * *"
+  timeZone: "America/Chicago"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: entry
+              image: ghcr.io/cole-titze/nhl-odds/entry:latest
+              imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RUN_MODE
+                  value: LineupSnapshot
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-app-credentials
+                      key: password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+
+---
 # CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
 apiVersion: batch/v1
 kind: CronJob
