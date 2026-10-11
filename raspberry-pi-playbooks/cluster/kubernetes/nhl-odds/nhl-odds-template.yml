@@ -386,7 +386,7 @@ spec:
   timeZone: "America/Chicago"
   jobTemplate:
     spec:
-      # Up to 3 attempts: a failure retrying all day would use up the Odds API quota
+      # Up to 3 attempts, so a failing fetch spends little of the Odds API quota
       backoffLimit: 2
       template:
         spec:
@@ -429,7 +429,7 @@ spec:
   timeZone: "America/Chicago"
   jobTemplate:
     spec:
-      # Up to 3 attempts: a failure retrying all day would use up the Odds API quota
+      # Up to 3 attempts, so a failing fetch spends little of the Odds API quota
       backoffLimit: 2
       template:
         spec:
