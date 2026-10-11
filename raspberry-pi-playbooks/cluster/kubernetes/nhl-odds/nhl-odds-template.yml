@@ -416,11 +416,11 @@ spec:
                       key: odds-api-key
 
 ---
-# CronJob: Daily odds fetch — KalshiFetch (6:15am CT) — replaces scheduler/daily-odds-fetch.sh step 2
+# CronJob: Daily odds fetch — NextDayKalshi (6:15am CT) — replaces scheduler/daily-odds-fetch.sh step 2
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: nhl-odds-entry-kalshi-fetch
+  name: nhl-odds-entry-next-day-kalshi
   namespace: nhl-odds
 spec:
   schedule: "15 6 * * *"
@@ -442,7 +442,7 @@ spec:
                 - name: TZ
                   value: America/Chicago
                 - name: RUN_MODE
-                  value: KalshiFetch
+                  value: NextDayKalshi
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
