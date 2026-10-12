@@ -418,6 +418,53 @@ spec:
                       key: odds-api-key
 
 ---
+# CronJob: Closing odds — ClosingOdds (every 5 min, 4am-11:55pm CT; 4am covers games in Europe/Asia)
+# Fetches every Odds API bookmaker's price for games starting in the next 6 minutes; makes no API call otherwise
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-entry-closing-odds
+  namespace: nhl-odds
+spec:
+  schedule: "*/5 4-23 * * *"
+  timeZone: "America/Chicago"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      # One retry: a failed request costs no credits, and the game usually hasn't started yet
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: entry
+              image: ghcr.io/cole-titze/nhl-odds/entry:latest
+              imagePullPolicy: Always
+              securityContext:
+                allowPrivilegeEscalation: false
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RUN_MODE
+                  value: ClosingOdds
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-app-credentials
+                      key: password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                - name: ODDS_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-secret
+                      key: odds-api-key
+
+---
 # CronJob: Daily odds fetch — NextDayKalshi (6:15am CT) — replaces scheduler/daily-odds-fetch.sh step 2
 apiVersion: batch/v1
 kind: CronJob
