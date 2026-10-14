@@ -235,18 +235,22 @@ spec:
               value: "--max-old-space-size=96"
           ports:
             - containerPort: 8080
+          # /healthz doesn't render a page or call the web API. It still waits behind pages being
+          # rendered, so the timeout allows for a busy server (1s took pods out under load).
           readinessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 8080
             initialDelaySeconds: 15
             periodSeconds: 30
+            timeoutSeconds: 5
           resources:
             requests:
               cpu: "50m"
