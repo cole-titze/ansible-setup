@@ -193,7 +193,9 @@ metadata:
   name: nhl-odds-frontend
   namespace: nhl-odds
 spec:
-  replicas: 2
+  # Two per worker: each Node.js server renders pages on one core, and a 150-user load test
+  # (admin page) maxed out two of them while the workers had spare cores
+  replicas: 4
   selector:
     matchLabels:
       app: nhl-odds-frontend
