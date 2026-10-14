@@ -1,7 +1,7 @@
 ---
 # Dumps are ~2.4 GB and growing (goal replays, shift charts, API responses). Downloading straight
 # into iCloud Drive made iCloud upload while the fetch ran, choking the transfer to ~1.5 MB/s.
-# So: fetch only new dumps into a non-iCloud staging dir, then copy the newest few into iCloud.
+# So: fetch only new dumps into a non-iCloud staging dir, then copy them into iCloud after.
 - name: Backup NHL Odds database
   hosts: node03
   gather_facts: false
@@ -11,7 +11,7 @@
     icloud_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
     remote_backup_dir: /home/pi/backups/nhl-odds/
     staging_keep: 15
-    icloud_keep: 3
+    icloud_keep: 15
     # Only nightly dumps; older hand-named files (nhl-20260415.dump, *-pre-repair) sort wrong and are left alone
     dump_pattern: "nhl-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].dump"
     # Ansible's default ssh_args include -C; dumps are already compressed, so skip it
