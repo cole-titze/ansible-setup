@@ -1,50 +1,107 @@
 ---
+# Dumps are ~2.4 GB and growing (goal replays, shift charts, API responses). Downloading straight
+# into iCloud Drive made iCloud upload while the fetch ran, choking the transfer to ~1.5 MB/s.
+# So: fetch only new dumps into a non-iCloud staging dir, then copy the newest few into iCloud.
 - name: Backup NHL Odds database
   hosts: node03
   gather_facts: false
 
   vars:
-    local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
+    staging_backup_dir: "{{ lookup('env', 'HOME') }}/source/backups/nhl-odds/"
+    icloud_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
     remote_backup_dir: /home/pi/backups/nhl-odds/
+    staging_keep: 15
+    icloud_keep: 3
+    # Only nightly dumps; older hand-named files (nhl-20260415.dump, *-pre-repair) sort wrong and are left alone
+    dump_pattern: "nhl-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].dump"
+    # Ansible's default ssh_args include -C; dumps are already compressed, so skip it
+    ansible_ssh_args: -o ControlMaster=auto -o ControlPersist=60s
 
   tasks:
-    - name: Ensure local backup directory exists
+    - name: Ensure local backup directories exist
       ansible.builtin.file:
-        path: "{{ local_backup_dir }}"
+        path: "{{ item }}"
         state: directory
         mode: "0755"
+      loop:
+        - "{{ staging_backup_dir }}"
+        - "{{ icloud_backup_dir }}"
       delegate_to: localhost
       run_once: true
 
     - name: Get list of backup files on node
       ansible.builtin.find:
         paths: "{{ remote_backup_dir }}"
-        patterns: "nhl-*.dump"
+        patterns: "{{ dump_pattern }}"
         file_type: file
       register: backup_files
 
-    - name: Fetch backup files to local machine
-      ansible.builtin.fetch:
-        src: "{{ item.path }}"
-        dest: "{{ local_backup_dir }}"
-        flat: true
-      loop: "{{ backup_files.files }}"
-
-    # Dumps grow to ~1.7 GB with shift charts and goal replays; keep the newest 15 in iCloud
-    - name: Find local backups
+    - name: Get list of backup files already staged
       ansible.builtin.find:
-        paths: "{{ local_backup_dir }}"
-        patterns: "nhl-*.dump"
+        paths: "{{ staging_backup_dir }}"
+        patterns: "{{ dump_pattern }}"
         file_type: file
-      register: local_backups
+      register: staged_backups
+      delegate_to: localhost
+
+    # Skipping files already staged (same name and size, so a partial fetch is retried) avoids
+    # fetch checksumming every multi-GB dump on both ends
+    - name: Fetch new backup files to staging
+      ansible.builtin.fetch:
+        src: "{{ remote_backup_dir }}{{ item.split(':')[0] }}"
+        dest: "{{ staging_backup_dir }}"
+        flat: true
+      loop: "{{ remote_keys | difference(staged_keys) | sort }}"
+      vars:
+        remote_keys: "{{ backup_files.files | map(attribute='path') | map('basename') | zip(backup_files.files | map(attribute='size')) | map('join', ':') | list }}"
+        staged_keys: "{{ staged_backups.files | map(attribute='path') | map('basename') | zip(staged_backups.files | map(attribute='size')) | map('join', ':') | list }}"
+
+    - name: Find staged backups
+      ansible.builtin.find:
+        paths: "{{ staging_backup_dir }}"
+        patterns: "{{ dump_pattern }}"
+        file_type: file
+      register: staged_backups
       delegate_to: localhost
       run_once: true
 
-    - name: Remove all but the newest 15 local backups (names are dated)
+    - name: Remove all but the newest staged backups (names are dated)
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
-      loop: "{{ (local_backups.files | sort(attribute='path', reverse=true))[15:] }}"
+      loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[staging_keep:] }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      delegate_to: localhost
+      run_once: true
+
+    # force: false skips dumps already in iCloud without checksumming them
+    - name: Copy the newest backups into iCloud
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ icloud_backup_dir }}"
+        force: false
+        mode: "0644"
+      loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[:icloud_keep] }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Find iCloud backups
+      ansible.builtin.find:
+        paths: "{{ icloud_backup_dir }}"
+        patterns: "{{ dump_pattern }}"
+        file_type: file
+      register: icloud_backups
+      delegate_to: localhost
+      run_once: true
+
+    - name: Remove all but the newest iCloud backups (names are dated)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (icloud_backups.files | sort(attribute='path', reverse=true))[icloud_keep:] }}"
       loop_control:
         label: "{{ item.path | basename }}"
       delegate_to: localhost
