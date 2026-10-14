@@ -45,7 +45,7 @@ metadata:
   name: nhl-odds-database
   namespace: nhl-odds
 spec:
-  instances: 2
+  instances: 3  # one per worker (node02-04)
   imageName: ghcr.io/cloudnative-pg/postgresql:18
   # enableSuperuserAccess stays true so ansible can still `psql -U postgres` via peer auth
   # in-pod during deploys. CNPG auto-manages the superuser password in a generated secret;
@@ -63,8 +63,8 @@ spec:
             key: create-tables.sql
   storage:
     size: 30Gi
-  # Primary and replica must never share a node. During a drain the evicted instance waits
-  # (Pending) until its node is uncordoned instead of doubling up on the other worker.
+  # Instances must never share a node. During a drain the evicted instance waits (Pending)
+  # until its node is uncordoned instead of doubling up, and the other two keep a standby.
   affinity:
     podAntiAffinityType: required
   # The ~1.1GB DB stays cached under the 2Gi limit (shared_buffers + OS page cache).
@@ -88,7 +88,7 @@ metadata:
   name: nhl-odds-webapi
   namespace: nhl-odds
 spec:
-  replicas: 2
+  replicas: 3  # one per worker (node02-04)
   selector:
     matchLabels:
       app: nhl-odds-webapi
@@ -193,9 +193,9 @@ metadata:
   name: nhl-odds-frontend
   namespace: nhl-odds
 spec:
-  # Two per worker: each Node.js server renders pages on one core, and a 150-user load test
-  # (admin page) maxed out two of them while the workers had spare cores
-  replicas: 4
+  # Two per worker: each Node.js server renders pages on one core. A 300-user load test
+  # (admin page) maxed out all four on two workers (~90 req/s) while the workers had spare cores
+  replicas: 6
   selector:
     matchLabels:
       app: nhl-odds-frontend
