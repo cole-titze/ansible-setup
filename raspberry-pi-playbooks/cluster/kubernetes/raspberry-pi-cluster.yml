@@ -144,6 +144,41 @@
   become: true
 
   tasks:
+    # K3s names the node after the hostname (matters for repurposed Pis like node04/dockerpi).
+    - name: Set hostname to the inventory name.
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: Point 127.0.1.1 at the new hostname.
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s'
+        line: "127.0.1.1\t{{ inventory_hostname }}"
+
+    - name: Write the K3s resolv.conf (hosts whose own resolver is loopback).
+      ansible.builtin.copy:
+        dest: "{{ k3s_resolv_conf }}"
+        content: |
+          nameserver 10.42.0.2
+          nameserver 10.42.0.3
+        mode: '0644'
+      when: k3s_resolv_conf is defined
+
+    - name: Ensure k3s config directory exists.
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: '0755'
+      when: k3s_resolv_conf is defined
+
+    - name: Write k3s agent config.
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml
+        content: |
+          resolv-conf: {{ k3s_resolv_conf }}
+        mode: '0644'
+      when: k3s_resolv_conf is defined
+
     - name: Install K3s on nodes (takes a while).
       ansible.builtin.shell: >-
         INSTALL_K3S_VERSION="{{ k3s_version }}"
@@ -185,10 +220,6 @@
 - name: Set up folding at home.
   import_playbook: folding-at-home/folding-at-home.yml
   tags: ['never', 'folding-at-home']
-
-- name: Set up esphome.
-  import_playbook: esphome/esphome.yml
-  tags: ['esphome']
 
 - name: Set up Prometheus.
   import_playbook: prometheus/prometheus.yml

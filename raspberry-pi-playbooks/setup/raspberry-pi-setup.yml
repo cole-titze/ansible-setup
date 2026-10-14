@@ -14,4 +14,4 @@
         name: "Nightly system update"
         user: root
         state: absent
-      when: inventory_hostname in groups['cluster'] + groups['docker'] + groups['backup_raspberrypi']
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']

@@ -36,7 +36,7 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/setup/raspb
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/setup/raspberry-pi-backup.yml
 ```
 
-> **Note:** `raspberry-pi-setup.yml` does not wire in the staggered maintenance crons. After running it on dockerpi or cluster nodes, run the appropriate maintenance playbook below.
+> **Note:** `raspberry-pi-setup.yml` does not wire in the staggered maintenance crons. After running it on cluster nodes, run the appropriate maintenance playbook below.
 
 ### Nightly maintenance
 
@@ -45,17 +45,14 @@ Each Pi updates and conditionally reboots on its own schedule so the fleet never
 | Host | Time (CT) | Playbook |
 |------|-----------|----------|
 | dockerpi_backup | 1:00am | `backup-node-maintenance.yml` |
-| dockerpi | 1:45am | `docker-node-maintenance.yml` |
+| node04 | 1:45am | `k8s-node-maintenance.yml` |
 | node02 | 2:00am | `k8s-node-maintenance.yml` |
 | node03 | 2:45am | `k8s-node-maintenance.yml` |
 | node01 | 3:30am | `k8s-node-maintenance.yml` |
 
-Cluster nodes only reboot if packages require it (`/var/run/reboot-required`). Docker nodes always reboot. Node order ensures workers go before the control plane, and the Longhorn storage node (node03) goes before node01.
+Cluster nodes only reboot if packages require it (`/var/run/reboot-required`); kured drains and reboots workers one at a time. Node order ensures workers go before the control plane, and the Longhorn storage node (node03) goes before node01.
 
 ```bash
-# Apply staggered maintenance to Docker machine
-ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/docker-node-maintenance.yml
-
 # Apply staggered maintenance to backup Pi
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-maintenance.yml
 
@@ -71,21 +68,18 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/p
 | Log | Host |
 |-----|------|
 | `/var/log/node-update.log` | all Pis |
-| `/var/log/k8s-node-update.log` | node01–03 |
-| `/var/log/portainer-update.log` | dockerpi |
-| `/var/log/home-assistant-update.log` | dockerpi |
-| `/var/log/home-assistant-backup.log` | dockerpi |
-| `/var/log/pihole-update.log` | dockerpi, dockerpi_backup |
+| `/var/log/k8s-node-update.log` | node01–04 |
+| `/var/log/pihole-update.log` | node04, dockerpi_backup |
 | `/var/log/pihole-failover.log` | dockerpi_backup |
 | `/var/lib/kvmd/pst/data/pikvm-update.log` | pikvm (last 2000 lines kept; `/var/log` is tmpfs there) |
 
-### Docker machine (dockerpi)
+### Primary DNS (node04)
 
-Requires secrets in `~/source/ansible-files/vars/cluster_vars.yml` and `retirement_vars.yml`. (NHL Odds moved to Kubernetes; remove a leftover Docker install with `raspberry-pi-playbooks/docker-machine/uninstall-nhl-odds.yml`.)
+node04 (the old dockerpi, 10.42.0.2) is a K3s worker that also runs the primary Pi-hole + unbound directly on the host, outside Kubernetes. Its K3s agent uses `/etc/k3s-resolv.conf` (set via `k3s_resolv_conf` in its host_vars) because the host resolver is loopback.
 
 ```bash
-# Install Docker + deploy active containers (Portainer, Home Assistant, Unbound, Pi-hole)
-ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-machine/docker-setup.yml
+# Flush Pi-hole + unbound caches on both DNS Pis
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/clear-pihole-cache.yml
 ```
 
 ### Kubernetes cluster

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Personal homelab Ansible orchestration for a Raspberry Pi cluster on `10.42.0.0/24`. Covers OS setup, a Docker host, a K3s cluster, and macOS backups. No test suite or CI pipeline.
+Personal homelab Ansible orchestration for a Raspberry Pi cluster on `10.42.0.0/24`. Covers OS setup, a K3s cluster, and macOS backups. No test suite or CI pipeline.
 
 ## Common Commands
 
@@ -36,9 +36,6 @@ ansible-playbook -i inventories/inventory.ini <playbook.yml> -vvv
 # OS setup for all Pis
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/setup/raspberry-pi-setup.yml
 
-# Docker host (Portainer, Unbound, Retirement Calculator) — requires secrets file
-ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/docker-machine/docker-setup.yml
-
 # Full K3s cluster (K3s, Helm, Longhorn, all services)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml
 
@@ -61,10 +58,9 @@ Defined in `inventories/inventory.ini`. Group variables in `inventories/group_va
 
 | Group | Host | IP | Purpose |
 |-------|------|----|---------|
-| `docker` | `dockerpi` | .2 | Primary Docker/Home Assistant server |
 | `backup_raspberrypi` | `dockerpi_backup` | .3 | Backup Pi (Unbound, Pi-hole failover) |
 | `control_plane` | `node01` | .20 | K3s master |
-| `nodes` | `node02–03` | .21–.22 | K3s workers |
+| `nodes` | `node02–04` | .21–.22, .2 | K3s workers (node04 = old dockerpi, also primary Pi-hole on the host) |
 | `storage` | `node03` | .22 | Longhorn storage |
 | `pikvms` | `pikvm` | pikvm | KVM management (user: root, python3.14) |
 
@@ -89,10 +85,10 @@ Templates are **never pre-rendered and committed**; Ansible renders them in-memo
 
 Secrets and cluster variables come from `~/source/ansible-files/vars/cluster_vars.yml` (external, not in repo).
 
-Currently active K8s services (tags in `raspberry-pi-cluster.yml`): `helm`, `traefik`, `longhorn`, `portainer`, `magic-mirror`, `esphome`, `prometheus` (metrics API comes from K3s's built-in metrics-server), `nhl-odds`, `kured` (drained one-at-a-time worker reboots, 2:00-2:55 CT).
+Currently active K8s services (tags in `raspberry-pi-cluster.yml`): `helm`, `traefik`, `longhorn`, `portainer`, `magic-mirror`, `prometheus` (metrics API comes from K3s's built-in metrics-server), `nhl-odds`, `kured` (drained one-at-a-time worker reboots, 2:00-2:55 CT).
 
 Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains using `IngressRoute` CRDs (`traefik.io/v1alpha1`). It generates a self-signed wildcard cert for `*.kubecluster` using the `community.crypto` collection.
 
-### Docker machine (dockerpi)
+### Primary DNS (node04)
 
-Managed via `raspberry-pi-playbooks/docker-machine/docker-setup.yml`, which calls the `docker` role. Container definitions live in `ansible-role-docker/tasks/containers/`.
+node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary Pi-hole + unbound on the host, outside Kubernetes. It keeps IP .2 because DHCP hands it out as the primary DNS; `dockerpi_backup` (.3) is the standalone secondary and takes over DHCP when .2 stops answering pings. Its K3s agent uses `/etc/k3s-resolv.conf` (`k3s_resolv_conf` host var) because the host resolver is 127.0.0.1, which K3s rejects.

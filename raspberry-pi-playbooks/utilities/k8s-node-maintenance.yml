@@ -11,6 +11,18 @@
         state: absent
         user: root
 
+    # node04 was the Docker machine (dockerpi); its old cron rebooted unconditionally.
+    - name: Remove old Docker node nightly update cron
+      ansible.builtin.cron:
+        name: "Docker node nightly update"
+        state: absent
+        user: root
+
+    - name: Remove old Docker node update script
+      ansible.builtin.file:
+        path: /usr/local/bin/update-system.sh
+        state: absent
+
     - name: Deploy K8s-aware update script
       ansible.builtin.copy:
         src: files/k8s-node-update.sh

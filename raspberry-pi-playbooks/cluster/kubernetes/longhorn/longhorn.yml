@@ -35,7 +35,8 @@
             defaultClassReplicaCount: 3
           defaultSettings:
             defaultReplicaCount: 3
-            replicaSoftAntiAffinity: true
+            replicaSoftAntiAffinity: false
+            replicaAutoBalance: best-effort
             defaultDataPath: "/var/lib/longhorn"
             # Live-upgrade volume engines after a Longhorn upgrade, one volume per node at a time.
             concurrentAutomaticEngineUpgradePerNodeLimit: 1

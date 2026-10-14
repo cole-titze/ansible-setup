@@ -1,6 +1,6 @@
 ---
 - name: Clear Pi-hole DNS cache
-  hosts: docker
+  hosts: node04:dockerpi_backup
   gather_facts: true
   become: true
 

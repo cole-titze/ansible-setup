@@ -1,2 +1,5 @@
 update_cron_hour: "1"
 update_cron_minute: "45"
+# The host resolver is its own Pi-hole (127.0.0.1), which K3s rejects (it would
+# fall back to 8.8.8.8 and bypass Pi-hole), so the agent gets its own resolv.conf.
+k3s_resolv_conf: /etc/k3s-resolv.conf

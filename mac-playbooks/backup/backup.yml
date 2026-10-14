@@ -7,10 +7,6 @@
   import_playbook: macbook/macbook-backup.yml
   tags: ['macbook']
 
-- name: Backup home assistant.
-  import_playbook: home-assistant/home-assistant-backup.yml
-  tags: ['home-assistant']
-
 - name: Backup NHL Odds database.
   import_playbook: nhl-odds/nhl-odds-backup.yml
   tags: ['nhl-odds']
