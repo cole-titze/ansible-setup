@@ -66,7 +66,7 @@ Defined in `inventories/inventory.ini`. Group variables in `inventories/group_va
 | `control_plane` | `node01` | .20 | K3s master |
 | `nodes` | `node02–03` | .21–.22 | K3s workers |
 | `storage` | `node03` | .22 | Longhorn storage |
-| `pikvms` | `pikvm` | pikvm | KVM management (user: root, python3.13) |
+| `pikvms` | `pikvm` | pikvm | KVM management (user: root, python3.14) |
 
 All Pi hosts use SSH key auth (`~/.ssh/<hostname>`) and `python3.11`.
 
