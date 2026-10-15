@@ -551,6 +551,43 @@ spec:
                 - name: NHL_DATABASE
                   value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
 
+---
+# CronJob: Weekly Light load test (Sunday 12:30am CT, clear of the 1am backups, the 2am kured
+# reboots and the 3am data collection). It only requests the run; the scheduler starts it like an
+# admin-page run, and slow pages or failed requests go to ErrorLog (Source 'LoadTest').
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-weekly-load-test
+  namespace: nhl-odds
+spec:
+  schedule: "30 0 * * 0"
+  timeZone: "America/Chicago"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: request
+              image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
+              imagePullPolicy: Always
+              command: ["/app/request-load-test.sh", "light"]
+              securityContext:
+                allowPrivilegeEscalation: false
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-app-credentials
+                      key: password
+                - name: NHL_DATABASE_URL
+                  value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+
 {% for host in groups['nodes'] %}
 ---
 # CronJob: Nightly database backup (1am CT) with 7-day retention — {{ host }}
