@@ -155,6 +155,42 @@
                     - port: 9500
                       protocol: TCP
 
+    # Probes the public nhl-odds site from inside the cluster, out through Cloudflare and back, so it
+    # catches tunnel and app outages (not this network's internet going down). nhl-odds rolls the
+    # results up into one row a day (its scheduler/k8s/save-uptime.sh), past Prometheus's 15 days.
+    - name: Deploy blackbox exporter
+      kubernetes.core.helm:
+        name: blackbox-exporter
+        chart_ref: prometheus-community/prometheus-blackbox-exporter
+        chart_version: "11.20.0"
+        update_repo_cache: true
+        release_namespace: default
+        state: present
+        values:
+          fullnameOverride: blackbox-exporter
+
+    - name: Probe the public nhl-odds site
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1
+          kind: Probe
+          metadata:
+            name: nhl-odds-public
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec:
+            # save-uptime.sh and the admin page count one probe as one minute
+            interval: 60s
+            module: http_2xx
+            prober:
+              url: blackbox-exporter.default.svc:9115
+            targets:
+              staticConfig:
+                static:
+                  - https://nhl.half-built.com/
+
     # Nightly copy of grafana.db (stars, preferences, UI-made dashboards; provisioned dashboards
     # are in git) to /home/pi/backups/grafana on whichever node runs Grafana, keeping 30 days.
     # mac-playbooks/backup/grafana pulls them off both workers. The RWO volume can only be mounted

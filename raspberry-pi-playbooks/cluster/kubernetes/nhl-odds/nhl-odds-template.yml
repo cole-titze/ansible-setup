@@ -588,6 +588,45 @@ spec:
                 - name: NHL_DATABASE_URL
                   value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
 
+---
+# CronJob: Rolls the blackbox probe of the public site (prometheus/prometheus.yml) up into one
+# "UptimeDay" row per Central Time day for the admin page's uptime chart (scheduler/k8s/save-uptime.sh)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-uptime-rollup
+  namespace: nhl-odds
+spec:
+  schedule: "*/15 * * * *"
+  timeZone: "America/Chicago"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: rollup
+              image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
+              imagePullPolicy: Always
+              command: ["/app/save-uptime.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+              env:
+                - name: PROMETHEUS_URL
+                  value: http://cluster-monitoring-kube-pr-prometheus.default:9090
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-app-credentials
+                      key: password
+                - name: NHL_DATABASE_URL
+                  value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+
 {% for host in groups['nodes'] %}
 ---
 # CronJob: Nightly database backup (1am CT) with 7-day retention — {{ host }}
