@@ -119,3 +119,5 @@
 
 - name: Apply staggered node maintenance (overrides raspberry-pi role cron)
   import_playbook: ../utilities/backup-node-maintenance.yml
+- name: Pull nightly nhl-odds dumps off the cluster
+  import_playbook: ../utilities/backup-node-db-pull.yml

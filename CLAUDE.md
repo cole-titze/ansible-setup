@@ -58,7 +58,7 @@ Defined in `inventories/inventory.ini`. Group variables in `inventories/group_va
 
 | Group | Host | IP | Purpose |
 |-------|------|----|---------|
-| `backup_raspberrypi` | `dockerpi_backup` | .3 | Backup Pi (Unbound, Pi-hole failover) |
+| `backup_raspberrypi` | `dockerpi_backup` | .3 | Backup Pi (Unbound, Pi-hole failover, off-cluster nhl-odds dumps) |
 | `control_plane` | `node01` | .20 | K3s master |
 | `nodes` | `node02–04` | .21–.22, .2 | K3s workers (node04 = old dockerpi, also primary Pi-hole on the host) |
 | `storage` | `node03` | .22 | Longhorn storage |
@@ -92,3 +92,7 @@ Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains usi
 ### Primary DNS (node04)
 
 node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary Pi-hole + unbound on the host, outside Kubernetes. It keeps IP .2 because DHCP hands it out as the primary DNS; `dockerpi_backup` (.3) is the standalone secondary and takes over DHCP when .2 stops answering pings. Its K3s agent uses `/etc/k3s-resolv.conf` (`k3s_resolv_conf` host var) because the host resolver is 127.0.0.1, which K3s rejects.
+
+### Off-cluster DB copies
+
+`utilities/backup-node-db-pull.yml` (also imported by `setup/raspberry-pi-backup.yml`): `dockerpi_backup` pulls the day's nhl-odds dump from the first worker that has it at 4:00 into `/home/pi/backups/nhl-odds` (keeps 30; log `/var/log/nhl-backup-pull.log`). Its key is limited on workers to read-only `rrsync` of that dir.

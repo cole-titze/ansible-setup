@@ -1,0 +1,69 @@
+---
+# The backup Pi pulls the nightly nhl-odds dump off a worker at 4:00 and keeps 30 days,
+# so a copy survives losing the cluster. Workers only let its key read their dump dir.
+- name: Create the backup Pi's pull key
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Generate SSH key for pulling dumps
+      community.crypto.openssh_keypair:
+        path: /root/.ssh/nhl_backup_pull
+        type: ed25519
+        comment: nhl-backup-pull@{{ inventory_hostname }}
+      register: pull_key
+
+- name: Let the backup Pi read nhl-odds dumps on workers
+  hosts: nodes
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Authorize the pull key, limited to read-only rsync of the dump dir
+      ansible.posix.authorized_key:
+        user: pi
+        key: "{{ hostvars[groups['backup_raspberrypi'][0]].pull_key.public_key }}"
+        key_options: 'restrict,command="/usr/bin/rrsync -ro /home/pi/backups/nhl-odds"'
+
+- name: Schedule the nightly pull on the backup Pi
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Copy pull script
+      ansible.builtin.copy:
+        src: files/nhl-backup-pull.sh
+        dest: /usr/local/bin/nhl-backup-pull.sh
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: /home/pi/backups/nhl-odds
+        state: directory
+        mode: "0755"
+
+    # Dumps start at 1:00 and take ~25 min; worker updates/reboots run 1:15–1:45
+    - name: Add nightly pull cron
+      ansible.builtin.cron:
+        name: "Pull nhl-odds DB dump"
+        job: "/usr/local/bin/nhl-backup-pull.sh {{ groups['nodes'] | map('extract', hostvars, 'ansible_host') | join(' ') }} >> /var/log/nhl-backup-pull.log 2>&1"
+        minute: "0"
+        hour: "4"
+        user: root
+
+    - name: Configure logrotate for the pull log
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/nhl-backup-pull
+        content: |
+          /var/log/nhl-backup-pull.log {
+              monthly
+              rotate 6
+              compress
+              missingok
+              notifempty
+          }
+        mode: "0644"
