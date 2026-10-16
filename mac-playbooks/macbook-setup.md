@@ -47,7 +47,7 @@ brew install --cask docker-desktop visual-studio-code jump-desktop-connect claud
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
 nvm install --lts                     # nhl-odds frontend (CI uses Node 22+)
 brew install uv                       # manages Python versions, Ansible and project venvs
-uv python install 3.14 3.12           # newest stable minor + the one the nhl-odds Dockerfile uses
+uv python install 3.14                # newest stable minor (also what the nhl-odds Dockerfile uses)
 uv tool update-shell                  # puts ~/.local/bin (uv tools) on PATH; open a new shell after
 ```
 - **.NET 10 SDK** (nhl-odds targets net10.0): `brew install --cask dotnet-sdk`. It runs Microsoft's installer, so it asks for your password **(manual)**.
@@ -65,7 +65,7 @@ Clone into `~/source/repos`: `ansible-setup`, `claude-skills`, `nhl-odds`, `reti
 Then run the `mac-setup` skill from `claude-skills` to link skills into `~/.claude/skills`.
 For nhl-odds, follow its `CLAUDE.md` (`npm install` in `frontend/`, `python -m game_predictor.libomp`), but create the venv with uv on the Dockerfile's Python minor so it picks up patch releases automatically:
 ```bash
-uv venv --managed-python --python 3.12 .venv
+uv venv --managed-python --python 3.14 .venv
 VIRTUAL_ENV=$PWD/.venv uv pip install -r game_predictor/requirements.txt -r game_predictor/requirements-experimental.txt
 ```
 
