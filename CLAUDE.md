@@ -91,7 +91,7 @@ Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains usi
 
 ### Primary DNS (node04)
 
-node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary Pi-hole + unbound on the host, outside Kubernetes. It keeps IP .2 because DHCP hands it out as the primary DNS; `dockerpi_backup` (.3) is the standalone secondary and takes over DHCP when .2 stops answering pings. Its K3s agent uses `/etc/k3s-resolv.conf` (`k3s_resolv_conf` host var) because the host resolver is 127.0.0.1, which K3s rejects.
+node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary Pi-hole + unbound on the host, outside Kubernetes. It keeps IP .2 because DHCP hands it out as the primary DNS; `dockerpi_backup` (.3) is the standalone secondary and takes over DHCP after .2 misses 3 pings in a row (one check per minute, `setup/pihole-failover-check.sh`, timestamped log `/var/log/pihole-failover.log`). Its K3s agent uses `/etc/k3s-resolv.conf` (`k3s_resolv_conf` host var) because the host resolver is 127.0.0.1, which K3s rejects.
 
 ### Off-cluster DB copies
 

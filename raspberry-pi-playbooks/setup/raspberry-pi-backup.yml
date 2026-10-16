@@ -110,7 +110,7 @@
         owner: root
         group: root
 
-    - name: Add cron job to run DHCP failover check every 2 minutes
+    - name: Add cron job to run DHCP failover check every minute
       cron:
         name: "Pi-hole DHCP failover watchdog"
         job: "/usr/local/bin/pihole-failover-check.sh >> /var/log/pihole-failover.log 2>&1"
