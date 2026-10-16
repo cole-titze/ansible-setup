@@ -84,6 +84,8 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/c
 
 ### Kubernetes cluster
 
+Adding a worker or control-plane Pi (flash, SSH key, inventory, playbooks): see [Adding cluster nodes](https://github.com/cole-titze/nhl-odds/wiki/Adding-Cluster-Nodes).
+
 #### Cluster services
 
 Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
