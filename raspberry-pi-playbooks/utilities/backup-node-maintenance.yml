@@ -26,10 +26,30 @@
           }
         mode: '0644'
 
-    - name: Add staggered nightly update cron
+    # The old cron ran the raspberry-pi role's update-system.sh, which rebooted every night.
+    - name: Remove old nightly update cron
       ansible.builtin.cron:
         name: "Docker node nightly update"
-        job: "/usr/local/bin/update-system.sh >> /var/log/node-update.log 2>&1"
+        state: absent
+        user: root
+
+    - name: Remove old update script
+      ansible.builtin.file:
+        path: /usr/local/bin/update-system.sh
+        state: absent
+
+    - name: Deploy update script (reboots only when required)
+      ansible.builtin.copy:
+        src: files/backup-node-update.sh
+        dest: /usr/local/bin/backup-node-update.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Add staggered nightly update cron
+      ansible.builtin.cron:
+        name: "Backup node nightly update"
+        job: "/usr/local/bin/backup-node-update.sh >> /var/log/node-update.log 2>&1"
         minute: "{{ update_cron_minute }}"
         hour: "{{ update_cron_hour }}"
         user: root

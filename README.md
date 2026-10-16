@@ -50,7 +50,7 @@ Each Pi updates and conditionally reboots on its own schedule so the fleet never
 | node03 | 2:45am | `k8s-node-maintenance.yml` |
 | node01 | 3:30am | `k8s-node-maintenance.yml` |
 
-Cluster nodes only reboot if packages require it (`/var/run/reboot-required`); kured drains and reboots workers one at a time. Node order ensures workers go before the control plane, and the Longhorn storage node (node03) goes before node01.
+Every Pi only reboots if packages require it (`/var/run/reboot-required`): the backup Pi reboots itself, and on the cluster kured drains and reboots workers one at a time. Node order ensures workers go before the control plane, and the Longhorn storage node (node03) goes before node01.
 
 ```bash
 # Apply staggered maintenance to backup Pi
