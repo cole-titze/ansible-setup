@@ -1,7 +1,7 @@
 #!/bin/bash
 # Weekly homelab upgrade + nhl-odds security pass, started by launchd
 # (com.coletitze.weekly-upgrade) on Sundays at 10:00 CT. Runs Claude Code headless on this Mac,
-# so it has the Mac's kubectl, gh, helm, ansible, docker, dotnet, ssh keys and the skills in
+# so it has the Mac's kubectl, gh, ansible, docker, dotnet, ssh keys (helm runs on node01) and the skills in
 # ~/.claude/skills. The instructions are in weekly-upgrade-prompt.md next to this script.
 set -uo pipefail
 
