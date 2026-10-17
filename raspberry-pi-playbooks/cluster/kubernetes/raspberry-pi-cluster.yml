@@ -189,6 +189,20 @@
         chdir: "~"
         creates: /var/lib/rancher/k3s/agent/kubelet.kubeconfig
 
+# K3s ships CoreDNS with 1 replica; when that node was busy (the 1 AM pg_dumps) every lookup timed
+# out. Its manifest has no replicas field, so the scale survives K3s restarts. The built-in
+# topologySpreadConstraints put the 2 pods on different nodes.
+- name: Run 2 CoreDNS replicas.
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Scale CoreDNS to 2 replicas.
+      ansible.builtin.command: kubectl -n kube-system scale deployment coredns --replicas=2
+      register: coredns_scale
+      changed_when: "'scaled' in coredns_scale.stdout"
+
 - name: Set up Helm.
   import_playbook: helm/helm.yml
   tags: ['helm']

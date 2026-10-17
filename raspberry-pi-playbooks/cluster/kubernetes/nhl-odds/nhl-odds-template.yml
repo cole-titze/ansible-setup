@@ -80,6 +80,7 @@ spec:
       shared_buffers: "1GB"           # Postgres's own page cache, ~25% of the limit
       effective_cache_size: "3GB"     # planner hint: shared_buffers + OS cache expected within the limit
       work_mem: "16MB"                # per sort/hash step, so big predictor/nhl-add queries sort in memory
+      hot_standby_feedback: "on"      # the nightly pg_dumps read a replica; keeps vacuum from cancelling them
 
 ---
 apiVersion: apps/v1
@@ -641,15 +642,17 @@ spec:
 
 {% for host in groups['nodes'] %}
 ---
-# CronJob: Nightly database backup (1am CT) with 7-day retention — {{ host }}
-# Dumps land at /home/pi/backups/nhl-odds/ on each node for SFTP retrieval
+# CronJob: Nightly database backup with 7-day retention — {{ host }}
+# Dumps land at /home/pi/backups/nhl-odds/ on each node for SFTP retrieval.
+# Staggered 20 min apart from 12:45am CT (node02 12:45, node03 1:05, node04 1:25) and read from a
+# replica (-ro): three parallel dumps of the primary maxed its node's CPU and NIC and starved CoreDNS.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: nhl-odds-db-backup-{{ host }}
   namespace: nhl-odds
 spec:
-  schedule: "0 1 * * *"
+  schedule: "{{ (45 + loop.index0 * 20) % 60 }} {{ (45 + loop.index0 * 20) // 60 }} * * *"
   timeZone: "America/Chicago"
   jobTemplate:
     spec:
@@ -675,7 +678,7 @@ spec:
                   set -e
                   mkdir -p /backups
                   BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
-                  pg_dump -h nhl-odds-database-rw -U nhl_app -Fc nhl > "$BACKUP_FILE"
+                  pg_dump -h nhl-odds-database-ro -U nhl_app -Fc nhl > "$BACKUP_FILE"
                   echo "Backup saved to $BACKUP_FILE"
                   find /backups -name "nhl-*.dump" -mtime +7 -delete
                   echo "Old backups pruned"
