@@ -1,7 +1,7 @@
 ---
 # grafana-db-backup CronJob (kubernetes/prometheus/prometheus.yml) writes to whichever worker
-# runs Grafana, so pull from both. Restore: scale Grafana to 0, copy a grafana-*.db into the
-# cluster-monitoring-grafana volume as grafana.db (owned 472:472), scale back to 1.
+# runs Grafana, so pull from every worker that has the folder. Restore: scale Grafana to 0, copy a
+# grafana-*.db into the cluster-monitoring-grafana volume as grafana.db (owned 472:472), scale back to 1.
 - name: Backup Grafana database
   hosts: nodes
   gather_facts: false
@@ -19,7 +19,14 @@
       delegate_to: localhost
       run_once: true
 
+    # A worker that has never run the CronJob has no folder; skip it instead of warning
+    - name: Check for the backup folder on node
+      ansible.builtin.stat:
+        path: "{{ remote_backup_dir }}"
+      register: backup_dir
+
     - name: Get list of backup files on node
+      when: backup_dir.stat.isdir | default(false)
       ansible.builtin.find:
         paths: "{{ remote_backup_dir }}"
         patterns: "grafana-*.db"
@@ -31,4 +38,4 @@
         src: "{{ item.path }}"
         dest: "{{ local_backup_dir }}"
         flat: true
-      loop: "{{ backup_files.files }}"
+      loop: "{{ backup_files.files | default([]) }}"
