@@ -59,17 +59,23 @@
         state: directory
         mode: '0755'
 
+    # The LAN is 10.42.0.0/24 (the K3s default pod range), so pods and services get their own
+    # ranges. Kept in config.yaml so upgrades that rerun the installer without flags keep them.
+    # Neither range can change in place: changing one means a full uninstall + reinstall.
     - name: Write k3s server config.
       ansible.builtin.copy:
         dest: /etc/rancher/k3s/config.yaml
         content: |
           disable:
             - traefik
+          cluster-cidr: 10.52.0.0/16
+          service-cidr: 10.53.0.0/16
+          flannel-backend: host-gw
         mode: '0644'
 
     - name: Install K3s on control plane (takes a while).
       ansible.builtin.shell: >-
-        INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_KUBECONFIG_MODE="644" ~/k3s_install.sh --cluster-cidr=10.43.0.0/16 --flannel-backend=host-gw >> ~/k3s_install_log.txt
+        INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_KUBECONFIG_MODE="644" ~/k3s_install.sh >> ~/k3s_install_log.txt
       args:
         chdir: "~"
         creates: /var/lib/rancher/k3s/server/node-token
