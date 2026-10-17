@@ -6,6 +6,17 @@
     - raspberry-pi
 
   post_tasks:
+    # For checking drives by hand (smartctl -a /dev/nvme0); the cluster's smartctl exporter brings its own.
+    # Without recommends it would also pull in an MTA for smartd's mail alerts.
+    - name: Install smartmontools
+      ansible.builtin.apt:
+        name: smartmontools
+        state: present
+        install_recommends: false
+        update_cache: true
+      # pikvm is Arch (pacman)
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
     # The role always adds a 2:00 "update + unconditional reboot" cron. These hosts have their own
     # staggered update crons (utilities/*-maintenance.yml), so the role's cron would reboot the
     # whole cluster at once. Remove it again after every role run.

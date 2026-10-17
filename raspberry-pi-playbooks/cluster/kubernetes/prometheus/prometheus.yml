@@ -169,6 +169,77 @@
         values:
           fullnameOverride: blackbox-exporter
 
+    # SMART data (wear, spare, temperature, media errors) from every node's NVMe drive. Alertmanager is
+    # off, so the alerts show on Prometheus's /alerts page and the Homelab Nodes dashboard's Disks row.
+    - name: Deploy smartctl exporter
+      kubernetes.core.helm:
+        name: smartctl-exporter
+        chart_ref: prometheus-community/prometheus-smartctl-exporter
+        chart_version: "0.17.1"
+        update_repo_cache: true
+        release_namespace: default
+        state: present
+        values:
+          fullnameOverride: smartctl-exporter
+          # The chart's default v0.14.0 image is amd64-only; v0.15.0 is the first release with arm64
+          image:
+            tag: v0.15.0
+          # Only the NVMe boot drives; Longhorn's iSCSI volumes show up as sd* and report nothing useful
+          config:
+            device_include: "nvme.*"
+          # node01 carries a NoExecute control-plane taint the chart's default toleration misses
+          tolerations:
+            - operator: Exists
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          serviceMonitor:
+            enabled: true
+            extraLabels:
+              release: cluster-monitoring
+            # instance is the pod IP; keep the node name for dashboards and alerts
+            relabelings:
+              - sourceLabels: [__meta_kubernetes_pod_node_name]
+                targetLabel: nodename
+          prometheusRules:
+            enabled: true
+            extraLabels:
+              release: cluster-monitoring
+            rules:
+              # The Pis' PCIe link is always slower than the drives' max, so this would always fire
+              smartCTLDInterfaceSlow:
+                enabled: false
+              # The 970 EVO Plus drives idle around 65-70°C and throttle at 85°C
+              smartCTLDDeviceTemperature:
+                expr: smartctl_device_temperature{temperature_type="current"} > 75
+                for: 10m
+                annotations:
+                  summary: Device has temperature higher than 75°C
+                  description: Device {{ '{{' }} $labels.device {{ '}}' }} on {{ '{{' }} $labels.nodename {{ '}}' }} is above 75°C (throttles at 85°C)
+              smartCTLDeviceWear:
+                enabled: true
+                alert: SmartCTLDeviceWear
+                expr: smartctl_device_percentage_used >= 80
+                for: 1h
+                annotations:
+                  summary: Device has used 80% of its rated endurance
+                  description: Device {{ '{{' }} $labels.device {{ '}}' }} on {{ '{{' }} $labels.nodename {{ '}}' }} is {{ '{{' }} $value {{ '}}' }}% worn; plan a replacement (wiki Replacing-a-Node-SSD)
+                labels:
+                  severity: warning
+              smartCTLExporterDown:
+                enabled: true
+                alert: SmartCTLExporterDown
+                expr: up{job="smartctl-exporter"} == 0
+                for: 15m
+                annotations:
+                  summary: smartctl exporter is not being scraped
+                  description: The smartctl exporter on {{ '{{' }} $labels.nodename {{ '}}' }} has been down for 15 minutes
+                labels:
+                  severity: warning
+
     - name: Probe the public nhl-odds site
       kubernetes.core.k8s:
         state: present

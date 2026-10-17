@@ -371,6 +371,43 @@ nodes += [
 ]
 y += 8
 
+# smartctl exporter (prometheus.yml); max by nodename collapses the old and new pod's series after a rollout
+SMART = 'device=~"nvme.*"'
+nodes.append(row("Disks (SMART)", y)); y += 1
+nodes += [
+    stat("SMART alerts firing", [tgt('count(ALERTS{alertname=~"SmartCTL.*", alertstate="firing"}) or vector(0)')],
+         0, y, w=4, h=6, decimals=0, graph=False, th=thresholds((None, "green"), (1, "red")),
+         desc="Prometheus alerts from the smartctl exporter's rules; details on prometheus.kubecluster/alerts."),
+    bargauge("Endurance used", [tgt(f"max by (nodename) (smartctl_device_percentage_used{{{SMART}}})",
+                                    "{{nodename}}", instant=True)], 4, y, w=5, h=6, unit="percent",
+             th=thresholds((None, "green"), (50, "yellow"), (80, "red")),
+             desc="NVMe 'percentage used' of rated endurance. Alert at 80%; plan a replacement (wiki Replacing-a-Node-SSD)."),
+    bargauge("Available spare", [tgt(f"min by (nodename) (smartctl_device_available_spare{{{SMART}}})",
+                                     "{{nodename}}", instant=True)], 9, y, w=5, h=6, unit="percent",
+             th=thresholds((None, "red"), (10, "yellow"), (50, "green")),
+             desc="Spare blocks left; the drive's own threshold is 10%."),
+    bargauge("Drive temp", [tgt(f'max by (nodename) (smartctl_device_temperature{{{SMART}, temperature_type="current"}})',
+                                "{{nodename}}", instant=True)], 14, y, w=5, h=6, unit="celsius",
+             th=thresholds((None, "green"), (70, "yellow"), (75, "red")),
+             desc="Alert above 75°C for 10 min; the drives throttle at 85°C."),
+    bargauge("Written", [tgt(f"max by (nodename) (smartctl_device_bytes_written{{{SMART}}})",
+                             "{{nodename}}", instant=True)], 19, y, w=5, h=6, unit="bytes", decimals=1,
+             desc="Lifetime writes. The 970 EVO Plus 500GB is rated 300 TBW, the 990 PRO 1TB 600 TBW."),
+]
+y += 6
+nodes += [
+    ts("Written per day", [tgt(f"max by (nodename) (increase(smartctl_device_bytes_written{{{SMART}}}[1d]))",
+                               "{{nodename}}")], 0, y, w=12, unit="bytes", fill=0, legend_calcs=["mean", "max"]),
+    stat("Media errors", [tgt(f"sum(max by (nodename) (smartctl_device_media_errors{{{SMART}}}))")],
+         12, y, w=4, h=8, decimals=0, graph=False, th=thresholds((None, "green"), (1, "red"))),
+    stat("Critical warnings", [tgt(f"sum(max by (nodename) (smartctl_device_critical_warning{{{SMART}}}))")],
+         16, y, w=4, h=8, decimals=0, graph=False, th=thresholds((None, "green"), (1, "red"))),
+    stat("Drives reporting", [tgt(f"count(max by (nodename) (smartctl_device_smart_status{{{SMART}}} == 1))")],
+         20, y, w=4, h=8, decimals=0, graph=False, th=thresholds((None, "red"), (4, "green")),
+         desc="Nodes whose NVMe drive passes its SMART self-assessment (4 = all)."),
+]
+y += 8
+
 nodes.append(row("Top consumers", y)); y += 1
 nodes += [
     ts("Top 10 pods by CPU", [tgt(
