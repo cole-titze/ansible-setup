@@ -66,8 +66,10 @@
       ansible.builtin.copy:
         dest: /etc/rancher/k3s/config.yaml
         content: |
+          # local-storage: Longhorn is the storage; K3s's local-path class was a second default
           disable:
             - traefik
+            - local-storage
           cluster-cidr: 10.52.0.0/16
           service-cidr: 10.53.0.0/16
           flannel-backend: host-gw

@@ -17,7 +17,11 @@
   vars:
     ansible_files_path: "~/source/ansible-files"
     local_backup_path: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/nhl.dump"
-    remote_backup_path: /tmp/nhl-odds-restore.dump
+    # The restore Job reads the dump from this worker's disk. kubectl cp/exec of a multi-GB dump
+    # into the pod times out (2026-10-17 rebuild), so nothing streams through the API server.
+    restore_node: "{{ groups['storage'][0] }}"
+    restore_dir: /home/pi/backups/nhl-odds
+    restore_file: nhl-restore.dump
 
   vars_files:
     - "{{ ansible_files_path }}/vars/nhl_vars.yml"
@@ -94,34 +98,89 @@
       changed_when: false
       when: backup_file.stat.exists
 
-    - name: Copy database backup to control plane
+    - name: Copy database backup to the restore node
       ansible.builtin.copy:
         src: "{{ local_backup_path }}"
-        dest: "{{ remote_backup_path }}"
+        dest: "{{ restore_dir }}/{{ restore_file }}"
         mode: '0644'
-      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
-
-    - name: Copy backup into database pod
-      ansible.builtin.command: >
-        kubectl cp {{ remote_backup_path }} nhl-odds/{{ db_pod_name.stdout }}:/var/lib/postgresql/data/restore.dump
+      delegate_to: "{{ restore_node }}"
       when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
     - name: Restore database from backup
-      ansible.builtin.shell: >
-        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
-        pg_restore --username=postgres --dbname=nhl --clean --if-exists --verbose /var/lib/postgresql/data/restore.dump
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: nhl-odds-db-restore
+            namespace: nhl-odds
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                nodeSelector:
+                  kubernetes.io/hostname: "{{ restore_node }}"
+                containers:
+                  - name: restore
+                    image: postgres:18
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - >-
+                        set -e;
+                        pg_restore -h nhl-odds-database-rw -U postgres -d nhl --clean --if-exists -j 2
+                        /backups/{{ restore_file }}
+                    env:
+                      - name: PGPASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: nhl-odds-database-superuser
+                            key: password
+                    volumeMounts:
+                      - name: backups
+                        mountPath: /backups
+                        readOnly: true
+                volumes:
+                  - name: backups
+                    hostPath:
+                      path: "{{ restore_dir }}"
+                      type: Directory
       when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
-    - name: Remove backup from database pod
-      ansible.builtin.shell: >
-        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} -- rm /var/lib/postgresql/data/restore.dump
+    # A few hours at most (11 GB took ~90 min on the Pis); stops at the first Complete or Failed
+    - name: Wait for the restore to finish
+      ansible.builtin.shell: |
+        for i in $(seq 1 1080); do
+          s=$(kubectl get job nhl-odds-db-restore -n nhl-odds -o jsonpath='{.status.succeeded}/{.status.failed}')
+          case "$s" in 1/*) exit 0;; */1) kubectl logs -n nhl-odds job/nhl-odds-db-restore | tail -20; exit 1;; esac
+          sleep 10
+        done
+        echo "restore still running after 3 h"; exit 1
       changed_when: false
       when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
-    - name: Remove backup from control plane
-      ansible.builtin.file:
-        path: "{{ remote_backup_path }}"
+    - name: Remove the restore Job
+      kubernetes.core.k8s:
         state: absent
+        api_version: batch/v1
+        kind: Job
+        name: nhl-odds-db-restore
+        namespace: nhl-odds
+        delete_options:
+          propagationPolicy: Background
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
+
+    - name: Remove backup from the restore node
+      ansible.builtin.file:
+        path: "{{ restore_dir }}/{{ restore_file }}"
+        state: absent
+      delegate_to: "{{ restore_node }}"
+      when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
+
+    - name: Analyze the restored database
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} -- psql -U postgres -d nhl -c 'ANALYZE'
       when: backup_file.stat.exists and (db_row_count.stdout | trim | int == 0)
 
     # Migration for clusters bootstrapped with owner=postgres: ensure nhl_app exists
