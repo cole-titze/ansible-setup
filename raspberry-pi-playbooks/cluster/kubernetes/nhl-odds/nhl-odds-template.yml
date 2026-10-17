@@ -37,6 +37,22 @@ data:
     {{ schema_sql.content | indent(4) }}
 
 ---
+# One Longhorn replica, kept on the instance's own node. CNPG already keeps a copy per worker,
+# and 3 Longhorn replicas per instance over the 100 Mb links timed out and rebuilt nonstop under
+# bulk writes (2026-10-17 rebuild restore).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-db
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: "1"
+  dataLocality: "best-effort"
+  staleReplicaTimeout: "30"
+---
 # CloudNativePG Cluster — replaces plain Deployment + PVC
 # CNPG automatically creates services: nhl-odds-database-rw (primary), nhl-odds-database-r (any), nhl-odds-database-ro (replicas)
 apiVersion: postgresql.cnpg.io/v1
@@ -63,6 +79,7 @@ spec:
             key: create-tables.sql
   storage:
     size: 30Gi
+    storageClass: longhorn-db
   # Instances must never share a node. During a drain the evicted instance waits (Pending)
   # until its node is uncordoned instead of doubling up, and the other two keep a standby.
   affinity:

@@ -34,6 +34,11 @@
       register: cnpg_install
       changed_when: "'configured' in cnpg_install.stdout or 'created' in cnpg_install.stdout"
 
+    # On a fresh cluster the Cluster object below is rejected until the operator's webhook is up.
+    - name: Wait for the CloudNativePG operator.
+      ansible.builtin.command: kubectl rollout status deployment/cnpg-controller-manager -n cnpg-system --timeout=300s
+      changed_when: false
+
     - name: Create nhl-odds namespace.
       kubernetes.core.k8s:
         name: nhl-odds

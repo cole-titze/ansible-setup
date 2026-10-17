@@ -46,9 +46,13 @@
         kubectl patch daemonset longhorn-manager -n longhorn-system --type=merge -p '{"spec":{"template":{"spec":{"affinity":{"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"DoesNotExist"}]}]}}}}}}}'
       changed_when: false
 
+    # Only exists if longhorn-manager ever ran on node01 (old clusters); a fresh install never
+    # registers it because of the affinity above, so there's nothing to patch.
     - name: Disable Longhorn scheduling on control-plane node
       ansible.builtin.shell: |
-        kubectl patch nodes.longhorn.io node01 -n longhorn-system --type=merge -p '{"spec":{"allowScheduling":false}}'
+        if kubectl get nodes.longhorn.io node01 -n longhorn-system >/dev/null 2>&1; then
+          kubectl patch nodes.longhorn.io node01 -n longhorn-system --type=merge -p '{"spec":{"allowScheduling":false}}'
+        fi
       changed_when: false
 
     - name: Expose Longhorn frontend as NodePort
