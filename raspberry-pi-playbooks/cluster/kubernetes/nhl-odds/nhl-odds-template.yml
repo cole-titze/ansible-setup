@@ -148,6 +148,12 @@ spec:
             tcpSocket:
               port: 8080
             initialDelaySeconds: 30
+          # Keep serving for 5s after the pod starts terminating: it leaves the Service at once, but
+          # every node's routing takes a moment to catch up, and requests sent meanwhile would be dropped
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           readinessProbe:
             tcpSocket:
               port: 8080
@@ -235,6 +241,12 @@ spec:
               value: "--max-old-space-size=96"
           ports:
             - containerPort: 8080
+          # Keep serving for 5s after the pod starts terminating: it leaves the Service at once, but
+          # every node's routing takes a moment to catch up, and requests sent meanwhile would be dropped
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           # /healthz doesn't render a page or call the web API. It still waits behind pages being
           # rendered, so the timeout allows for a busy server (1s took pods out under load).
           readinessProbe:
