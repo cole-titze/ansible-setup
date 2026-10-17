@@ -1,0 +1,85 @@
+---
+# Installs the Mac's scheduled jobs as launchd LaunchAgents (they run as you, with your PATH tools,
+# ssh keys, kubeconfig, gh/Claude logins and iCloud Drive). Re-run after changing a schedule.
+#   ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
+# Logs: ~/Library/Logs/homelab/. Run one now: launchctl kickstart gui/$(id -u)/<label>
+# Remove one: launchctl bootout gui/$(id -u)/<label> && rm ~/Library/LaunchAgents/<label>.plist
+- name: Install Mac scheduled jobs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    home: "{{ lookup('env', 'HOME') }}"
+    scripts_dir: "{{ home }}/source/repos/ansible-setup/mac-playbooks/scheduled-jobs/scripts"
+    log_dir: "{{ home }}/Library/Logs/homelab"
+    launch_agents_dir: "{{ home }}/Library/LaunchAgents"
+    # Times are the Mac's local time (America/Chicago).
+    jobs:
+      # After the cluster's nhl-odds dump (1:00), Grafana backup (1:30) and kured reboots (2:00-2:55)
+      - name: nightly-backup
+        label: com.coletitze.nightly-backup
+        script: nightly-backup.sh
+        hour: 3
+        minute: 10
+      # Sunday, after the load test (00:30), image rebuilds (~03:00), Trivy scan (~05:00) and
+      # dependabot-merge (~09:00). launchd Weekday: 0 = Sunday.
+      - name: weekly-upgrade
+        label: com.coletitze.weekly-upgrade
+        script: weekly-upgrade.sh
+        weekday: 0
+        hour: 10
+        minute: 0
+
+  tasks:
+    - name: Ensure log and LaunchAgents directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ log_dir }}"
+        - "{{ launch_agents_dir }}"
+
+    - name: Make the job scripts executable
+      ansible.builtin.file:
+        path: "{{ scripts_dir }}/{{ item.script }}"
+        mode: "0755"
+      loop: "{{ jobs }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Write the LaunchAgent plists
+      ansible.builtin.template:
+        src: templates/launch-agent.plist.j2
+        dest: "{{ launch_agents_dir }}/{{ item.label }}.plist"
+        mode: "0644"
+      loop: "{{ jobs }}"
+      loop_control:
+        label: "{{ item.label }}"
+      register: plists
+
+    - name: Get your user id for launchctl
+      ansible.builtin.command: id -u
+      register: uid
+      changed_when: false
+
+    # bootout fails if the job isn't loaded yet; that's fine
+    - name: Unload changed LaunchAgents
+      ansible.builtin.command: "launchctl bootout gui/{{ uid.stdout }}/{{ item.item.label }}"
+      loop: "{{ plists.results }}"
+      loop_control:
+        label: "{{ item.item.label }}"
+      when: item.changed
+      failed_when: false
+      changed_when: true
+
+    - name: Load LaunchAgents that aren't loaded
+      ansible.builtin.shell: |
+        launchctl print gui/{{ uid.stdout }}/{{ item.label }} >/dev/null 2>&1 && exit 0
+        launchctl bootstrap gui/{{ uid.stdout }} {{ launch_agents_dir }}/{{ item.label }}.plist && echo loaded
+      loop: "{{ jobs }}"
+      loop_control:
+        label: "{{ item.label }}"
+      register: loaded
+      changed_when: "'loaded' in loaded.stdout"

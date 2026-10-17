@@ -69,6 +69,17 @@ uv venv --managed-python --python 3.14 .venv
 VIRTUAL_ENV=$PWD/.venv uv pip install -r game_predictor/requirements.txt -r game_predictor/requirements-experimental.txt
 ```
 
+## 6b. Scheduled jobs (control machine only)
+Run on the Mac that stays on as the homelab control machine (one Mac only, or the jobs run twice):
+```bash
+cd ~/source/repos/ansible-setup && ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
+```
+It installs two launchd LaunchAgents that run as you, with your tools, keys and logins:
+- `com.coletitze.nightly-backup`: daily 3:10, runs `mac-playbooks/backup/scripts/Backup.sh` (after the cluster's 1:00 nhl-odds dump, 1:30 Grafana backup and kured's 2:00-2:55 reboots).
+- `com.coletitze.weekly-upgrade`: Sundays 10:00, runs Claude Code headless with `scripts/weekly-upgrade-prompt.md` (the weekly jobs check, `/k8s-major-upgrade` and `/nhl-odds-security`, applying changes unattended).
+
+Logs and the weekly summary go to `~/Library/Logs/homelab/`; a macOS notification fires on failure (and when the weekly run finishes). Test one now with `launchctl kickstart gui/$(id -u)/com.coletitze.nightly-backup`. If a job can't read iCloud Drive or `~/.ssh`, give `/bin/bash` Full Disk Access in System Settings → Privacy & Security **(manual)**.
+
 ## 7. Optional / personal
 Install only if wanted: ChatGPT, Firefox, Discord, Minecraft.
 

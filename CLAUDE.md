@@ -48,6 +48,9 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/u
 
 # Mac backups (no inventory flag needed)
 ansible-playbook mac-playbooks/backup/backup.yml
+
+# Install/refresh the Mac's launchd jobs (nightly backup 3:10, weekly upgrade Sun 10:00)
+ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
 
 Helper scripts (need `chmod +x`): `raspberry-pi-playbooks/utilities/scripts/Deploy.sh`, `Upgrade.sh`, `Uninstall.sh`.

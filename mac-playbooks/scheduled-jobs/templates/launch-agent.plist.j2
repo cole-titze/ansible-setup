@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Managed by ansible-setup/mac-playbooks/scheduled-jobs/scheduled-jobs.yml. Edit there, not here. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{{ item.label }}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>{{ scripts_dir }}/{{ item.script }}</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+{% if item.weekday is defined %}
+    <key>Weekday</key>
+    <integer>{{ item.weekday }}</integer>
+{% endif %}
+    <key>Hour</key>
+    <integer>{{ item.hour }}</integer>
+    <key>Minute</key>
+    <integer>{{ item.minute }}</integer>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>{{ home }}/source/repos</string>
+  <key>StandardOutPath</key>
+  <string>{{ log_dir }}/{{ item.name }}.launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{ log_dir }}/{{ item.name }}.launchd.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
