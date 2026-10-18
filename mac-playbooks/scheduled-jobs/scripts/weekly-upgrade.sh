@@ -25,6 +25,19 @@ notify() {
 
 cd "$HOME/source/repos" || exit 1
 
+# macOS Local Network privacy: under launchd only Apple's binaries (ssh, curl) may reach 10.42.0.x;
+# kubectl gets "no route to host". Tunnel the K3s API through localhost with ssh and point a
+# copy of the kubeconfig at it (K3s's API cert covers 127.0.0.1).
+KUBE_TUNNEL_PORT=16443
+ssh -i "$HOME/.ssh/node01" -o BatchMode=yes -o ExitOnForwardFailure=yes -N \
+  -L "$KUBE_TUNNEL_PORT:127.0.0.1:6443" pi@10.42.0.20 >>"$LOG" 2>&1 &
+tunnel_pid=$!
+KUBECONFIG="$(mktemp -t weekly-kubeconfig)"
+export KUBECONFIG
+trap 'kill $tunnel_pid 2>/dev/null; rm -f "$KUBECONFIG"' EXIT
+sed "s|server: https://10.42.0.20:6443|server: https://127.0.0.1:$KUBE_TUNNEL_PORT|" "$HOME/.kube/config" >"$KUBECONFIG"
+for _ in $(seq 1 15); do nc -z 127.0.0.1 "$KUBE_TUNNEL_PORT" 2>/dev/null && break; sleep 1; done
+
 {
   echo "== Weekly upgrade $(date '+%Y-%m-%d %H:%M:%S')"
   # Unattended: no one is there to approve tool calls. The prompt carries the safety rules.
