@@ -43,6 +43,8 @@
         weekday: 0
         hour: 10
         minute: 0
+        # Background throttles the job's network I/O; its long API streams stalled mid-run
+        process_type: Standard
 
   tasks:
     - name: Ensure log and LaunchAgents directories exist

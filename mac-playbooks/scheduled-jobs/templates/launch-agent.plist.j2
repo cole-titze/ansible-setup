@@ -28,6 +28,6 @@
   <key>StandardErrorPath</key>
   <string>{{ log_dir }}/{{ item.name }}.launchd.log</string>
   <key>ProcessType</key>
-  <string>Background</string>
+  <string>{{ item.process_type | default('Background') }}</string>
 </dict>
 </plist>
