@@ -28,6 +28,13 @@
         script: backup-stale-check.sh
         hour: 9
         minute: 0
+      # Saturday, after the nightly backup: restores the newest iCloud copies to prove they work
+      - name: restore-drill
+        label: com.coletitze.restore-drill
+        script: restore-drill.sh
+        weekday: 6
+        hour: 4
+        minute: 0
       # Sunday, after the load test (00:30), image rebuilds (~03:00), Trivy scan (~05:00) and
       # dependabot-merge (~09:00). launchd Weekday: 0 = Sunday.
       - name: weekly-upgrade

@@ -1,0 +1,190 @@
+---
+# Weekly proof that the iCloud backups restore. Run by scheduled-jobs/scripts/restore-drill.sh.
+# - nhl-odds: newest dump -> throwaway postgres:18 container (prod's major), then sanity checks
+# - Grafana: SQLite integrity check on the newest grafana-*.db (dashboards are in git; it holds stars + users)
+# - MacBook: newest backup folder has the kubeconfig, ssh keys and Claude settings
+# launchd's bash and docker can't read iCloud Drive, Ansible's Python can, so Ansible copies the
+# files out to a scratch folder first. Leaves nothing behind.
+- name: Restore drill for the iCloud backups
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    home: "{{ lookup('env', 'HOME') }}"
+    backups_dir: "{{ home }}/source/ansible-files/backups"
+    scratch_dir: "{{ home }}/source/backups/restore-drill"
+    container: restore-drill
+    min_tables: 50
+    # Dumps are taken around 1 AM, so the newest finished job is normally from the day before
+    max_data_lag_days: 2
+    failures: []
+
+  tasks:
+    - name: Find the backups
+      ansible.builtin.find:
+        paths: "{{ backups_dir }}/{{ item.dir }}"
+        patterns: "{{ item.pattern }}"
+        file_type: "{{ item.file_type }}"
+      loop:
+        - { name: nhl-odds, dir: nhl-odds, pattern: "nhl-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].dump", file_type: file }
+        - { name: grafana, dir: grafana, pattern: "grafana-*.db", file_type: file }
+        - { name: macbook, dir: macbook, pattern: "backup_*", file_type: directory }
+      loop_control:
+        label: "{{ item.name }}"
+      register: found
+
+    # Names are dated, so the newest is last by name
+    - name: Pick the newest of each
+      ansible.builtin.set_fact:
+        newest: "{{ newest | default({}) | combine({item.item.name: (item.files | map(attribute='path') | sort | last | default(''))}) }}"
+      loop: "{{ found.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Record missing backups
+      ansible.builtin.set_fact:
+        failures: "{{ failures + [item.key ~ ': no backup found'] }}"
+      loop: "{{ newest | dict2items | selectattr('value', 'equalto', '') | list }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Restore and check
+      block:
+        - name: Make the scratch folder
+          ansible.builtin.file:
+            path: "{{ scratch_dir }}"
+            state: directory
+            mode: "0700"
+
+        - name: Copy the nhl-odds dump and Grafana db out of iCloud
+          ansible.builtin.copy:
+            src: "{{ newest[item] }}"
+            dest: "{{ scratch_dir }}/"
+            mode: "0600"
+          loop: [nhl-odds, grafana]
+          when: newest[item] != ''
+
+        # ---- nhl-odds ---------------------------------------------------------------------
+        - name: Restore the nhl-odds dump into a throwaway Postgres
+          when: newest['nhl-odds'] != ''
+          ansible.builtin.shell: |
+            set -uo pipefail
+            # Docker Desktop may not be running at 4 AM
+            if ! docker info >/dev/null 2>&1; then
+              open -a Docker
+              for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
+            fi
+            docker info >/dev/null 2>&1 || { echo "Docker isn't running"; exit 1; }
+            docker rm -f {{ container }} >/dev/null 2>&1
+            t0=$(date +%s)
+            docker run -d --name {{ container }} -e POSTGRES_PASSWORD=drill -e POSTGRES_DB=nhl postgres:18 >/dev/null || exit 1
+            for _ in $(seq 1 60); do docker exec {{ container }} pg_isready -U postgres -q 2>/dev/null && break; sleep 1; done
+            docker cp "{{ scratch_dir }}/{{ newest['nhl-odds'] | basename }}" {{ container }}:/tmp/drill.dump || exit 1
+            t1=$(date +%s)
+            docker exec {{ container }} pg_restore -U postgres -d nhl -j 6 --no-owner --no-privileges --exit-on-error /tmp/drill.dump || exit 1
+            t2=$(date +%s)
+            q() { docker exec {{ container }} psql -U postgres -d nhl -Atc "$1"; }
+            echo "copy_time=$((t1 - t0))s"
+            echo "restore_time=$((t2 - t1))s"
+            echo "tables=$(q 'select count(*) from pg_stat_user_tables')"
+            echo "size=$(q "select pg_size_pretty(pg_database_size('nhl'))")"
+            echo "last_job=$(q "select max(\"FinishedAt\")::date from \"JobStatus\" where \"Status\" = 'completed'")"
+          args:
+            executable: /bin/bash
+          register: restore
+          changed_when: false
+          failed_when: false
+
+        - name: Read the restore results
+          when: newest['nhl-odds'] != ''
+          ansible.builtin.set_fact:
+            restored: "{{ dict(restore.stdout_lines | select('search', '^[a-z_]+=') | map('split', '=', 1)) }}"
+            dump_date: "{{ (newest['nhl-odds'] | basename)[4:14] }}"
+
+        - name: Show the nhl-odds result
+          when: newest['nhl-odds'] != ''
+          ansible.builtin.debug:
+            msg: >-
+              nhl-odds: {{ newest['nhl-odds'] | basename }} restored in {{ restored.restore_time | default('?') }}
+              (copy {{ restored.copy_time | default('?') }}), {{ restored.tables | default('?') }} tables,
+              {{ restored.size | default('?') }}, newest job {{ restored.last_job | default('?') }}
+
+        - name: Record nhl-odds failures
+          when: newest['nhl-odds'] != ''
+          ansible.builtin.set_fact:
+            failures: "{{ failures + nhl_failures }}"
+          vars:
+            lag_days: >-
+              {{ ((dump_date | to_datetime('%Y-%m-%d')) - (restored.last_job | to_datetime('%Y-%m-%d'))).days
+                 if restored.last_job | default('') | length == 10 else 999 }}
+            nhl_failures: >-
+              {{ (['nhl-odds: restore failed: ' ~ (restore.stdout_lines + restore.stderr_lines) | last | default('')]
+                   if restore.rc != 0 else [])
+                 + (['nhl-odds: only ' ~ restored.tables | default(0) ~ ' tables']
+                   if restore.rc == 0 and restored.tables | default(0) | int < min_tables else [])
+                 + (['nhl-odds: newest job ' ~ restored.last_job | default('none') ~ ' is ' ~ lag_days ~ ' days before the dump']
+                   if restore.rc == 0 and lag_days | int > max_data_lag_days else []) }}
+
+        # ---- Grafana ----------------------------------------------------------------------
+        - name: Check the Grafana db
+          when: newest['grafana'] != ''
+          ansible.builtin.shell: |
+            f="{{ scratch_dir }}/{{ newest['grafana'] | basename }}"
+            echo "integrity=$(sqlite3 -readonly "$f" 'pragma integrity_check' 2>&1 | head -1)"
+            echo "users=$(sqlite3 -readonly "$f" 'select count(*) from user' 2>&1)"
+            echo "stars=$(sqlite3 -readonly "$f" 'select count(*) from star' 2>&1)"
+          register: grafana_check
+          changed_when: false
+
+        - name: Record Grafana failures
+          when: newest['grafana'] != ''
+          ansible.builtin.set_fact:
+            failures: "{{ failures + (['grafana: integrity ' ~ g.integrity] if g.integrity != 'ok' else [])
+                                    + (['grafana: no users'] if not (g.users is regex('^[1-9][0-9]*$')) else []) }}"
+          vars:
+            g: "{{ dict(grafana_check.stdout_lines | map('split', '=', 1)) }}"
+
+        - name: Show the Grafana result
+          when: newest['grafana'] != ''
+          ansible.builtin.debug:
+            msg: "grafana: {{ newest['grafana'] | basename }}: {{ grafana_check.stdout_lines | join(', ') }}"
+
+        # ---- MacBook ----------------------------------------------------------------------
+        - name: Check the MacBook backup has its key files
+          when: newest['macbook'] != ''
+          ansible.builtin.find:
+            paths: "{{ newest['macbook'] }}/{{ item }}"
+            file_type: file
+          loop: [kube, ssh, claude]
+          register: mac_files
+
+        - name: Record MacBook failures
+          when: newest['macbook'] != ''
+          ansible.builtin.set_fact:
+            failures: "{{ failures + ['macbook: ' ~ item.item ~ ' folder empty'] }}"
+          loop: "{{ mac_files.results | selectattr('matched', 'equalto', 0) | list }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+        - name: Show the MacBook result
+          when: newest['macbook'] != ''
+          ansible.builtin.debug:
+            msg: "macbook: {{ newest['macbook'] | basename }}: {{ mac_files.results | map(attribute='matched') | zip(['kube', 'ssh', 'claude']) | map('reverse') | map('join', ' ') | join(', ') }} files"
+
+      always:
+        - name: Remove the throwaway Postgres
+          ansible.builtin.command: docker rm -f {{ container }}
+          changed_when: false
+          failed_when: false
+
+        - name: Remove the scratch folder
+          ansible.builtin.file:
+            path: "{{ scratch_dir }}"
+            state: absent
+
+    # The wrapper script shows this message in the notification
+    - name: Fail if anything didn't restore
+      ansible.builtin.fail:
+        msg: "DRILL FAILED: {{ failures | join(', ') }}"
+      when: failures | length > 0

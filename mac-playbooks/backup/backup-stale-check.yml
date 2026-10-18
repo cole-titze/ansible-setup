@@ -1,0 +1,76 @@
+---
+# Fails if a nightly backup didn't reach iCloud: the newest nhl-odds dump, MacBook folder or Grafana
+# db is over max_age_hours old (or missing). Run by scheduled-jobs/scripts/backup-stale-check.sh.
+# Ansible's Python can read iCloud Drive under launchd; plain bash there gets "Operation not permitted".
+- name: Check the iCloud backups are fresh
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    backups_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups"
+    max_age_hours: 26
+    checks:
+      - name: nhl-odds
+        path: "{{ backups_dir }}/nhl-odds"
+        pattern: "nhl-*.dump"
+        file_type: file
+      - name: macbook
+        path: "{{ backups_dir }}/macbook"
+        pattern: "backup_*"
+        file_type: directory
+      - name: grafana
+        path: "{{ backups_dir }}/grafana"
+        pattern: "grafana-*.db"
+        file_type: file
+
+  tasks:
+    - name: Find each backup
+      ansible.builtin.find:
+        paths: "{{ item.path }}"
+        patterns: "{{ item.pattern }}"
+        file_type: "{{ item.file_type }}"
+      loop: "{{ checks }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: found
+
+    - name: Work out each newest backup's age
+      ansible.builtin.set_fact:
+        ages: >-
+          {%- set ns = namespace(out={}) -%}
+          {%- for r in found.results -%}
+            {%- if r.files | length > 0 -%}
+              {%- set newest = r.files | sort(attribute='mtime') | last -%}
+              {%- set ns.out = ns.out | combine({r.item.name: {
+                    'file': newest.path | basename,
+                    'hours': ((now().timestamp() - newest.mtime) / 3600) | int}}) -%}
+            {%- else -%}
+              {%- set ns.out = ns.out | combine({r.item.name: none}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.out }}
+
+    - name: Show each newest backup
+      ansible.builtin.debug:
+        msg: "{{ item.key }}: {{ (item.value.file ~ ', ' ~ item.value.hours ~ 'h old') if item.value else 'none found' }}"
+      loop: "{{ ages | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    # The wrapper script shows this message in the notification
+    - name: Fail if any backup is stale
+      ansible.builtin.fail:
+        msg: "STALE: {{ stale | join(', ') }}"
+      vars:
+        stale: >-
+          {%- set ns = namespace(out=[]) -%}
+          {%- for name, age in ages.items() -%}
+            {%- if not age -%}
+              {%- set ns.out = ns.out + [name ~ ' none found'] -%}
+            {%- elif age.hours >= max_age_hours | int -%}
+              {%- set ns.out = ns.out + [name ~ ' ' ~ age.hours ~ 'h old'] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.out }}
+      when: stale | length > 0
