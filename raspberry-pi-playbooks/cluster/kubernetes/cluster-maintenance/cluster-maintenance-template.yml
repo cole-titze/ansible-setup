@@ -87,10 +87,10 @@ data:
     }
 
     pins=$(kubectl get configmap -n cluster-maintenance image-pins -o json | jq -c '.data // {}') || exit 1
-    [ -n "${APPLY_ONLY:-}" ] || for key in $(echo "$pins" | jq -r 'keys[] | select(contains(".") | not)'); do
-      cur=$(echo "$pins" | jq -r --arg k "$key" '.[$k]')
+    [ -n "${APPLY_ONLY:-}" ] || for key in $(printf %s "$pins" | jq -r 'keys[] | select(contains(".") | not)'); do
+      cur=$(printf %s "$pins" | jq -r --arg k "$key" '.[$k]')
       repo="${cur%@*}"
-      if [ -n "$(echo "$pins" | jq -r --arg k "$key.hold" '.[$k] // empty')" ]; then
+      if [ -n "$(printf %s "$pins" | jq -r --arg k "$key.hold" '.[$k] // empty')" ]; then
         echo "$key: held at $cur"; continue
       fi
       d=$(digest "${repo#ghcr.io/}")
@@ -108,7 +108,7 @@ data:
     for ns in default nhl-odds portainer retirement-calculator; do
       objs=$(kubectl get deployment,cronjob -n "$ns" -o json) || { status=1; continue; }
       # "<kind>/<name> <container>=<image>" for every pinned container that's off its pin
-      echo "$objs" | jq -r --argjson pins "$pins" '
+      printf %s "$objs" | jq -r --argjson pins "$pins" '
         ($pins | to_entries | map(select(.key | contains(".") | not)) | map({key: (.value | split("@")[0]), value: .value}) | from_entries) as $want
         | .items[] | (.kind | ascii_downcase) as $k | .metadata.name as $n
         | (.spec.template.spec.containers // .spec.jobTemplate.spec.template.spec.containers)[]
@@ -120,7 +120,7 @@ data:
         kubectl set image -n "$ns" "$obj" "$img" || status=1
       done
       # Deployments with no pinned container (cloudflared, portainer, ...) still float on :latest
-      [ -n "${APPLY_ONLY:-}" ] || for d in $(echo "$objs" | jq -r --argjson pins "$pins" '
+      [ -n "${APPLY_ONLY:-}" ] || for d in $(printf %s "$objs" | jq -r --argjson pins "$pins" '
         ([$pins | to_entries[] | select(.key | contains(".") | not) | .value | split("@")[0]]) as $repos
         | .items[] | select(.kind == "Deployment")
         | select([.spec.template.spec.containers[].image | split("@")[0] | sub(":[^:/]+$"; "")] | any(. as $r | $repos | index($r)) | not)
