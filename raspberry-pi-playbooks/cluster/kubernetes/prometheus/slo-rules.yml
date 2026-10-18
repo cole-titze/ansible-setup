@@ -1,0 +1,142 @@
+# SLOs over a 28-day window, plus job-freshness alerts. Loaded verbatim (no Jinja) by
+# prometheus.yml as PrometheusRule homelab-slos; tested by slo-rules-test.yml:
+#   docker run --rm -v "$PWD:/r" -w /r --entrypoint promtool quay.io/prometheus/prometheus:v3.15.0 test rules slo-rules-test.yml
+#
+#   Availability  99.5%  the public site answers the blackbox probe (1/min)   budget ~3.4 h / 28 d
+#   API           99%    public API requests (not Admin) are non-5xx and < 512 ms
+#
+# Burn-rate alerts follow the SRE workbook: fire when both a long and a short window spend
+# budget N times faster than the rate that would use it up in exactly 28 days. Runbooks:
+# https://github.com/cole-titze/nhl-odds/wiki/Runbooks
+groups:
+  - name: slo-sli
+    interval: 1m
+    rules:
+      - record: slo:availability:error_ratio
+        expr: 1 - avg_over_time(probe_success{job="probe/default/nhl-odds-public"}[30m])
+        labels: {window: 30m}
+      - record: slo:availability:error_ratio
+        expr: 1 - avg_over_time(probe_success{job="probe/default/nhl-odds-public"}[6h])
+        labels: {window: 6h}
+      # Good = non-5xx and in the 0.512 s bucket. Excluded: Admin (GetHealthChecks calls out to
+      # other services, ~1.7 s by design), MCP (long-lived streams) and unmatched routes (404 probes).
+      - record: slo:api:error_ratio
+        expr: |
+          1 - sum(rate(http_request_duration_seconds_bucket{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|",code!~"5..",le="0.512"}[5m]))
+            / sum(rate(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[5m]))
+        labels: {window: 5m}
+      - record: slo:api:error_ratio
+        expr: |
+          1 - sum(rate(http_request_duration_seconds_bucket{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|",code!~"5..",le="0.512"}[30m]))
+            / sum(rate(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[30m]))
+        labels: {window: 30m}
+      - record: slo:api:error_ratio
+        expr: |
+          1 - sum(rate(http_request_duration_seconds_bucket{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|",code!~"5..",le="0.512"}[1h]))
+            / sum(rate(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[1h]))
+        labels: {window: 1h}
+      - record: slo:api:error_ratio
+        expr: |
+          1 - sum(rate(http_request_duration_seconds_bucket{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|",code!~"5..",le="0.512"}[6h]))
+            / sum(rate(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[6h]))
+        labels: {window: 6h}
+      # Requests in the last hour, so a handful of slow calls at 3 AM can't page
+      - record: slo:api:requests:increase1h
+        expr: sum(increase(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[1h]))
+
+  # The long windows are slow to evaluate on a Pi and change slowly, so they run every 5 min
+  - name: slo-sli-long
+    interval: 5m
+    rules:
+      - record: slo:availability:error_ratio
+        expr: 1 - avg_over_time(probe_success{job="probe/default/nhl-odds-public"}[3d])
+        labels: {window: 3d}
+      - record: slo:availability:error_ratio
+        expr: 1 - avg_over_time(probe_success{job="probe/default/nhl-odds-public"}[28d])
+        labels: {window: 28d}
+      - record: slo:api:error_ratio
+        expr: |
+          1 - sum(rate(http_request_duration_seconds_bucket{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|",code!~"5..",le="0.512"}[3d]))
+            / sum(rate(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[3d]))
+        labels: {window: 3d}
+      - record: slo:api:error_ratio
+        expr: |
+          1 - sum(rate(http_request_duration_seconds_bucket{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|",code!~"5..",le="0.512"}[28d]))
+            / sum(rate(http_request_duration_seconds_count{job="nhl-odds/nhl-odds-webapi",controller!="Admin",endpoint!~"/?mcp.*|"}[28d]))
+        labels: {window: 28d}
+      # Fraction of the 28-day error budget left (negative = overspent)
+      - record: slo:availability:budget_remaining
+        expr: 1 - slo:availability:error_ratio{window="28d"} / 0.005
+      - record: slo:api:budget_remaining
+        expr: 1 - slo:api:error_ratio{window="28d"} / 0.01
+
+  - name: slo-alerts
+    rules:
+      # A sharp outage pages via NhlOddsSiteDown (5 min down); these catch flapping that
+      # never stays down 5 straight minutes. 6x burn = 2.1% of a month's budget per hour.
+      - alert: NhlOddsAvailabilityBurn
+        expr: |
+          slo:availability:error_ratio{window="6h"} > 6 * 0.005
+          and ignoring(window) slo:availability:error_ratio{window="30m"} > 6 * 0.005
+        labels:
+          severity: warning
+        annotations:
+          summary: nhl site failing probes; 6h burn 6x+ the SLO budget
+          runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddsavailabilityburn
+      # 1x over 3 days: on track to miss the month. Dashboard only (info isn't texted).
+      - alert: NhlOddsAvailabilitySlowBurn
+        expr: |
+          slo:availability:error_ratio{window="3d"} > 0.005
+          and ignoring(window) slo:availability:error_ratio{window="6h"} > 0.005
+        labels:
+          severity: info
+        annotations:
+          summary: nhl site availability under 99.5% over 3 days
+          runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddsavailabilityburn
+      # 14.4x for an hour spends 2% of the month's budget
+      - alert: NhlOddsApiFastBurn
+        expr: |
+          slo:api:error_ratio{window="1h"} > 14.4 * 0.01
+          and ignoring(window) slo:api:error_ratio{window="5m"} > 14.4 * 0.01
+          and on() slo:api:requests:increase1h > 50
+        labels:
+          severity: critical
+        annotations:
+          summary: nhl API errors or slow (>512ms) on 14%+ of requests for 1h
+          runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddsapiburn
+      - alert: NhlOddsApiBurn
+        expr: |
+          slo:api:error_ratio{window="6h"} > 6 * 0.01
+          and ignoring(window) slo:api:error_ratio{window="30m"} > 6 * 0.01
+          and on() slo:api:requests:increase1h > 50
+        labels:
+          severity: warning
+        annotations:
+          summary: nhl API errors or slow (>512ms) on 6%+ of requests for 6h
+          runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddsapiburn
+
+  - name: job-freshness
+    rules:
+      # Daily jobs: 25.5 h since the last success means today's run is missing or failed
+      # (the 6:30 predictor alerts at ~8:00 the next morning)
+      - alert: DailyJobLate
+        expr: |
+          time() - kube_cronjob_status_last_successful_time{cronjob=~"nhl-odds-predictor|nhl-odds-entry-nhl-add|nhl-odds-entry-next-day-odds|nhl-odds-entry-next-day-kalshi|nhl-odds-db-backup-node0[234]|grafana-db-backup|nightly-image-updater"}
+            > 25.5 * 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.cronjob }} hasn't succeeded in 25h+"
+          runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#dailyjoblate
+      # The latest scheduled run hasn't succeeded (failed, stuck or still retrying) for 2 h. For
+      # the updater that means prod is still on yesterday's builds.
+      - alert: CronJobFailing
+        expr: |
+          kube_cronjob_status_last_schedule_time{namespace=~"nhl-odds|cluster-maintenance|default"}
+            > kube_cronjob_status_last_successful_time
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.cronjob }}: latest run hasn't succeeded for 2h+"
+          runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#cronjobfailing

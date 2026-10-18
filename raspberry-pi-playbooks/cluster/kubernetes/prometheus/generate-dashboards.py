@@ -434,8 +434,63 @@ nodes_dash = dashboard(
     links=[{"title": "NHL Stack Health", "type": "link", "url": "/d/nhl-stack-health", "icon": "dashboard"}],
 )
 
+# ---------------------------------------------------------------- SLOs
+# Series come from the recording rules in slo-rules.yml (window label = lookback).
+BUDGET_TH = thresholds((None, "red"), (0, "orange"), (0.25, "yellow"), (0.5, "green"))
+BURN_TH = thresholds((None, "green"), (1, "yellow"), (6, "orange"), (14.4, "red"))
+REBUILT = ("Prometheus history starts at the 2026-10-17 cluster rebuild, whose downtime is inside the window: "
+           "budget reads overspent until about 2026-11-14.")
+slos = []
+y = 0
+slos.append(row("Error budget (last 28 days)", y)); y += 1
+slos += [
+    stat("Site availability", [tgt('1 - slo:availability:error_ratio{window="28d"}', instant=True)],
+         0, y, w=6, unit="percentunit", decimals=3, graph=False,
+         th=thresholds((None, "red"), (0.995, "green")),
+         desc="Share of 1/min blackbox probes of https://nhl.half-built.com/ that succeeded. Target 99.5%."),
+    stat("Site budget left", [tgt('slo:availability:budget_remaining', instant=True)],
+         6, y, w=6, unit="percentunit", decimals=0, graph=False, th=BUDGET_TH,
+         desc="Share of the 28-day error budget (0.5% of probes, ~3.4 h) not yet spent. Negative = SLO missed. " + REBUILT),
+    stat("API good requests", [tgt('1 - slo:api:error_ratio{window="28d"}', instant=True)],
+         12, y, w=6, unit="percentunit", decimals=3, graph=False,
+         th=thresholds((None, "red"), (0.99, "green")),
+         desc="Public API requests (not Admin/MCP) that were non-5xx and under 512 ms. Target 99%."),
+    stat("API budget left", [tgt('slo:api:budget_remaining', instant=True)],
+         18, y, w=6, unit="percentunit", decimals=0, graph=False, th=BUDGET_TH,
+         desc="Share of the 28-day API error budget (1% of requests) not yet spent. Heavy/stress load tests spend it."),
+]
+y += 4
+slos.append(row("Burn rate (1 = spending budget exactly as fast as 28 days allows)", y)); y += 1
+slos += [
+    ts("Site burn rate", [tgt('slo:availability:error_ratio{window=~"30m|6h|3d"} / 0.005', "{{window}}")],
+       0, y, w=12, minv=0, th=BURN_TH, th_style="line",
+       desc="NhlOddsAvailabilityBurn fires when 6h and 30m are both above 6; the slow-burn info alert at 1 over 3d."),
+    ts("API burn rate", [tgt('slo:api:error_ratio{window=~"5m|1h|6h"} / 0.01', "{{window}}")],
+       12, y, w=12, minv=0, th=BURN_TH, th_style="line",
+       desc="NhlOddsApiFastBurn: 1h and 5m above 14.4. NhlOddsApiBurn: 6h and 30m above 6. Both need 50+ requests in the last hour."),
+]
+y += 8
+slos.append(row("Scheduled jobs", y)); y += 1
+slos += [
+    bargauge("Hours since last success", [tgt(
+        'sort_desc((time() - kube_cronjob_status_last_successful_time{namespace=~"nhl-odds|cluster-maintenance|default"}) / 3600)',
+        "{{cronjob}}", instant=True)], 0, y, w=24, h=10, unit="h", decimals=1,
+        th=thresholds((None, "green"), (25.5, "red")),
+        desc="Daily jobs alert (DailyJobLate) past 25.5 h; any job whose latest run hasn't succeeded for 2 h alerts as CronJobFailing."),
+]
+
+slo_dash = dashboard(
+    "homelab-slos", "SLOs", ["homelab"], slos,
+    "Error budgets and burn rates for the public nhl-odds site and API, and scheduled-job freshness. "
+    "Runbooks: https://github.com/cole-titze/nhl-odds/wiki/Runbooks",
+    refresh="1m", time_from="now-7d",
+    links=[{"title": "Runbooks", "type": "link", "url": "https://github.com/cole-titze/nhl-odds/wiki/Runbooks",
+            "icon": "doc", "targetBlank": True},
+           {"title": "NHL Stack Health", "type": "link", "url": "/d/nhl-stack-health", "icon": "dashboard"}],
+)
+
 os.makedirs(OUT, exist_ok=True)
-for name, d in [("nhl-stack-health", nhl_dash), ("homelab-nodes", nodes_dash)]:
+for name, d in [("nhl-stack-health", nhl_dash), ("homelab-nodes", nodes_dash), ("homelab-slos", slo_dash)]:
     with open(os.path.join(OUT, f"{name}.json"), "w") as f:
         json.dump(d, f, indent=2)
         f.write("\n")

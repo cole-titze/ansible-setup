@@ -162,10 +162,12 @@
           prometheus:
             image:
               pullPolicy: Always
-            # Without a volume Prometheus loses all history on every restart
+            # Without a volume Prometheus loses all history on every restart. ~0.5 GB/day: 30 days
+            # covers the 28-day SLO window (slo-rules.yml) with the size cap as a backstop.
+            # Growing the volume: patch the PVC first (the operator can't resize it), then this.
             prometheusSpec:
-              retention: 15d
-              retentionSize: 8GB
+              retention: 30d
+              retentionSize: 20GB
               storageSpec:
                 volumeClaimTemplate:
                   spec:
@@ -173,7 +175,7 @@
                     accessModes: ["ReadWriteOnce"]
                     resources:
                       requests:
-                        storage: 10Gi
+                        storage: 25Gi
             service:
               type: ClusterIP
             ingress:
@@ -317,6 +319,7 @@
                 annotations:
                   summary: Device has used 80% of its rated endurance
                   description: Device {{ '{{' }} $labels.device {{ '}}' }} on {{ '{{' }} $labels.nodename {{ '}}' }} is {{ '{{' }} $value {{ '}}' }}% worn; plan a replacement (wiki Replacing-a-Node-SSD)
+                  runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Replacing-a-Node-SSD
                 labels:
                   severity: warning
               smartCTLExporterDown:
@@ -398,6 +401,7 @@
                       severity: critical
                     annotations:
                       summary: nhl.half-built.com down 5+ min
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddssitedown
                   # kured reboots take a node away for ~2 minutes
                   - alert: NodeDown
                     expr: kube_node_status_condition{condition="Ready",status="true"} == 0
@@ -406,6 +410,7 @@
                       severity: critical
                     annotations:
                       summary: "{{ '{{' }} $labels.node {{ '}}' }} not Ready 10+ min"
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nodedown
                   - alert: NhlOddsDatabaseNoPrimary
                     expr: absent(cnpg_pg_replication_in_recovery{cluster="nhl-odds-database"} == 0)
                     for: 5m
@@ -413,6 +418,7 @@
                       severity: critical
                     annotations:
                       summary: nhl-odds DB has no primary
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddsdatabasenoprimary
                   # Drains and node reboots take an instance down for a few minutes
                   - alert: NhlOddsDatabaseInstanceDown
                     expr: sum(cnpg_collector_up{cluster="nhl-odds-database"}) < 3
@@ -421,6 +427,7 @@
                       severity: warning
                     annotations:
                       summary: "nhl-odds DB {{ '{{' }} $value {{ '}}' }}/3 instances up"
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nhloddsdatabaseinstancedown
                   - alert: LonghornVolumeFaulted
                     expr: longhorn_volume_robustness{state="faulted"} == 1
                     for: 5m
@@ -428,6 +435,7 @@
                       severity: critical
                     annotations:
                       summary: "Longhorn volume faulted: {{ '{{' }} $labels.pvc {{ '}}' }}"
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#longhornvolumefaulted
                   # Replicas rebuild for a while after a drain
                   - alert: LonghornVolumeDegraded
                     expr: longhorn_volume_robustness{state="degraded"} == 1
@@ -436,6 +444,7 @@
                       severity: warning
                     annotations:
                       summary: "Longhorn volume degraded 1h+: {{ '{{' }} $labels.pvc {{ '}}' }}"
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#longhornvolumedegraded
                   # Date-only reminder (the UPS has no data port); repeats every 12h until the
                   # install date is updated
                   - alert: UpsBatteryReplace
@@ -444,6 +453,22 @@
                       severity: warning
                     annotations:
                       summary: "UPS battery installed {{ ups_battery_installed }}: replace it"
+                      runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#upsbatteryreplace
+
+    # SLOs (site availability, API errors+latency) and job-freshness alerts. Plain YAML, not a
+    # template, so promtool can test the same file: see the command at the top of slo-rules.yml.
+    - name: Deploy SLO rules
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1
+          kind: PrometheusRule
+          metadata:
+            name: homelab-slos
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec: "{{ lookup('file', 'slo-rules.yml') | from_yaml }}"
 
     # Nightly copy of grafana.db (stars, preferences, UI-made dashboards; provisioned dashboards
     # are in git) to /home/pi/backups/grafana on whichever node runs Grafana, keeping 30 days.
