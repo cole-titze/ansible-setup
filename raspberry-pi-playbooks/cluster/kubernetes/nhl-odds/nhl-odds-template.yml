@@ -132,8 +132,8 @@ spec:
         runAsNonRoot: true
       containers:
         - name: webapi
-          image: ghcr.io/cole-titze/nhl-odds/webapi:latest
-          imagePullPolicy: Always
+          image: "{{ image_pins['nhl-odds-webapi'] }}"
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
           ports:
@@ -245,8 +245,8 @@ spec:
         runAsNonRoot: true
       containers:
         - name: frontend
-          image: ghcr.io/cole-titze/nhl-odds/frontend:latest
-          imagePullPolicy: Always
+          image: "{{ image_pins['nhl-odds-frontend'] }}"
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
           # Node server: renders pages (fetching from the API directly), serves assets,
@@ -352,8 +352,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: entry
-              image: ghcr.io/cole-titze/nhl-odds/entry:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-entry'] }}"
+              imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
               env:
@@ -393,8 +393,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: entry
-              image: ghcr.io/cole-titze/nhl-odds/entry:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-entry'] }}"
+              imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
               env:
@@ -440,8 +440,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: entry
-              image: ghcr.io/cole-titze/nhl-odds/entry:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-entry'] }}"
+              imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
               env:
@@ -483,8 +483,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: entry
-              image: ghcr.io/cole-titze/nhl-odds/entry:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-entry'] }}"
+              imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
               env:
@@ -524,8 +524,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: entry
-              image: ghcr.io/cole-titze/nhl-odds/entry:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-entry'] }}"
+              imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
               resources:
@@ -566,8 +566,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: predictor
-              image: ghcr.io/cole-titze/nhl-odds/predictor:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-predictor'] }}"
+              imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
               env:
@@ -602,8 +602,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: request
-              image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
+              imagePullPolicy: IfNotPresent
               command: ["/app/request-load-test.sh", "light"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -641,8 +641,8 @@ spec:
             runAsNonRoot: true
           containers:
             - name: rollup
-              image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
-              imagePullPolicy: Always
+              image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
+              imagePullPolicy: IfNotPresent
               command: ["/app/save-uptime.sh"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -851,8 +851,8 @@ spec:
         runAsNonRoot: true
       containers:
         - name: scheduler
-          image: ghcr.io/cole-titze/nhl-odds/scheduler-k8s:latest
-          imagePullPolicy: Always
+          image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
           env:

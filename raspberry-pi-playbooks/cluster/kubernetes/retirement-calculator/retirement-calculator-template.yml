@@ -29,8 +29,8 @@ spec:
             - pod-template-hash
       containers:
         - name: retirement-calculator
-          image: ghcr.io/cole-titze/retirement-calculator:latest
-          imagePullPolicy: Always
+          image: "{{ image_pins['retirement-calculator'] }}"
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
           readinessProbe:

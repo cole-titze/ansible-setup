@@ -18,6 +18,9 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "daemonsets", "statefulsets"]
     verbs: ["get", "list", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -32,8 +35,106 @@ subjects:
     name: nightly-updater
     namespace: cluster-maintenance
 ---
-# Runs nightly at 4am CT. Restarts all deployments/daemonsets that use
-# imagePullPolicy: Always so they pick up new :latest images.
+# The pins themselves (ConfigMap image-pins) are written by the app playbooks and this
+# updater, never by this template, so re-applying it can't reset them.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nightly-updater-pins
+  namespace: cluster-maintenance
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["image-pins"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nightly-updater-pins
+  namespace: cluster-maintenance
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nightly-updater-pins
+subjects:
+  - kind: ServiceAccount
+    name: nightly-updater
+    namespace: cluster-maintenance
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nightly-updater-script
+  namespace: cluster-maintenance
+data:
+  update.sh: |
+{% raw %}
+    # image-pins maps a name to repo@digest. Each night every name without a
+    # <name>.hold key moves to the digest PROMOTE_TAG points at (old one kept in
+    # <name>.previous), then every Deployment/CronJob using that repo is set to it.
+    # Pinned Deployments only roll when their digest changes. APPLY_ONLY=1 skips the
+    # move and just applies the pins (utilities/scripts/image-pin.sh runs it that way).
+    set -u
+    TAG="${PROMOTE_TAG:-latest}"
+    ACCEPT="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json"
+    status=0
+
+    digest() {
+      tok=$(curl -fsS "https://ghcr.io/token?scope=repository:$1:pull" | jq -r .token) || return 1
+      curl -fsSI -H "Authorization: Bearer $tok" -H "Accept: $ACCEPT" "https://ghcr.io/v2/$1/manifests/$TAG" \
+        | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }'
+    }
+
+    pins=$(kubectl get configmap -n cluster-maintenance image-pins -o json | jq -c '.data // {}') || exit 1
+    [ -n "${APPLY_ONLY:-}" ] || for key in $(echo "$pins" | jq -r 'keys[] | select(contains(".") | not)'); do
+      cur=$(echo "$pins" | jq -r --arg k "$key" '.[$k]')
+      repo="${cur%@*}"
+      if [ -n "$(echo "$pins" | jq -r --arg k "$key.hold" '.[$k] // empty')" ]; then
+        echo "$key: held at $cur"; continue
+      fi
+      d=$(digest "${repo#ghcr.io/}")
+      case "$d" in
+        sha256:*) ;;
+        *) echo "$key: lookup of :$TAG failed, keeping $cur"; status=1; continue ;;
+      esac
+      [ "$repo@$d" = "$cur" ] && { echo "$key: unchanged"; continue; }
+      kubectl patch configmap -n cluster-maintenance image-pins --type merge \
+        -p "$(jq -nc --arg k "$key" --arg v "$repo@$d" --arg p "$cur" '{data: {($k): $v, ($k + ".previous"): $p}}')" || status=1
+      echo "$key: $cur -> $repo@$d"
+    done
+
+    pins=$(kubectl get configmap -n cluster-maintenance image-pins -o json | jq -c '.data // {}') || exit 1
+    for ns in default nhl-odds portainer retirement-calculator; do
+      objs=$(kubectl get deployment,cronjob -n "$ns" -o json) || { status=1; continue; }
+      # "<kind>/<name> <container>=<image>" for every pinned container that's off its pin
+      echo "$objs" | jq -r --argjson pins "$pins" '
+        ($pins | to_entries | map(select(.key | contains(".") | not)) | map({key: (.value | split("@")[0]), value: .value}) | from_entries) as $want
+        | .items[] | (.kind | ascii_downcase) as $k | .metadata.name as $n
+        | (.spec.template.spec.containers // .spec.jobTemplate.spec.template.spec.containers)[]
+        | (.image | split("@")[0] | sub(":[^:/]+$"; "")) as $repo
+        | select($want[$repo] != null and $want[$repo] != .image)
+        | "\($k)/\($n) \(.name)=\($want[$repo])"' |
+      while read -r obj img; do
+        echo "$ns: $obj -> ${img#*=}"
+        kubectl set image -n "$ns" "$obj" "$img" || status=1
+      done
+      # Deployments with no pinned container (cloudflared, portainer, ...) still float on :latest
+      [ -n "${APPLY_ONLY:-}" ] || for d in $(echo "$objs" | jq -r --argjson pins "$pins" '
+        ([$pins | to_entries[] | select(.key | contains(".") | not) | .value | split("@")[0]]) as $repos
+        | .items[] | select(.kind == "Deployment")
+        | select([.spec.template.spec.containers[].image | split("@")[0] | sub(":[^:/]+$"; "")] | any(. as $r | $repos | index($r)) | not)
+        | .metadata.name'); do
+        kubectl rollout restart deployment -n "$ns" "$d" || status=1
+      done
+    done
+    echo "Done"
+    exit $status
+{% endraw %}
+---
+# Runs nightly at 4am CT: moves image pins to the newest promoted build and restarts
+# the unpinned deployments. StatefulSets are left alone — they hit the CNPG database
+# and force an unnecessary primary switchover.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -47,23 +148,24 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      backoffLimit: 2
       template:
         spec:
           serviceAccountName: nightly-updater
           restartPolicy: OnFailure
           containers:
             - name: updater
-              image: bitnami/kubectl:latest
-              imagePullPolicy: Always
-              command:
-                - /bin/sh
-                - -c
-                - |
-                  set -e
-                  # Only restart Deployments — StatefulSets hit the CNPG database
-                  # and force an unnecessary primary switchover.
-                  for ns in default nhl-odds portainer retirement-calculator; do
-                    echo "Restarting deployments in $ns"
-                    kubectl rollout restart deployment -n $ns 2>/dev/null || true
-                  done
-                  echo "Done"
+              # kubectl + curl + jq; keep in step with the K3s minor
+              image: alpine/k8s:1.36.5
+              env:
+                # The tag a build must carry to reach prod
+                - name: PROMOTE_TAG
+                  value: latest
+              command: ["/bin/sh", "/scripts/update.sh"]
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+          volumes:
+            - name: script
+              configMap:
+                name: nightly-updater-script

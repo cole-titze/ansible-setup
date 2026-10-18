@@ -58,6 +58,16 @@
       delegate_to: localhost
       become: false
 
+    - name: Load image pins.
+      ansible.builtin.import_tasks: ../cluster-maintenance/image-pins.yml
+      vars:
+        image_pin_repos:
+          nhl-odds-webapi: cole-titze/nhl-odds/webapi
+          nhl-odds-frontend: cole-titze/nhl-odds/frontend
+          nhl-odds-entry: cole-titze/nhl-odds/entry
+          nhl-odds-predictor: cole-titze/nhl-odds/predictor
+          nhl-odds-scheduler-k8s: cole-titze/nhl-odds/scheduler-k8s
+
     - name: Apply nhl-odds manifests.
       kubernetes.core.k8s:
         definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"

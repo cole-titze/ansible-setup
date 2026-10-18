@@ -25,6 +25,12 @@
         kind: Namespace
         state: present
 
+    - name: Load image pins.
+      ansible.builtin.import_tasks: ../cluster-maintenance/image-pins.yml
+      vars:
+        image_pin_repos:
+          retirement-calculator: cole-titze/retirement-calculator
+
     - name: Apply retirement-calculator manifests.
       kubernetes.core.k8s:
         definition: "{{ lookup('template', 'retirement-calculator-template.yml') }}"
