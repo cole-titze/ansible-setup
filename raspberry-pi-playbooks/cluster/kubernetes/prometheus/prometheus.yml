@@ -6,6 +6,10 @@
 
   vars:
     ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
+    # UPS (Tripp Lite BC600R, no USB port) battery: set to the install date after each swap and
+    # re-run with -t prometheus. UpsBatteryReplace fires 30 months later (SLA lasts 3-5 years).
+    ups_battery_installed: "2026-10-18"
+    ups_battery_life_months: 30
 
   # alerting_vars.yml: alerting_smtp_user (Gmail address), alerting_smtp_password (Gmail app
   # password), alerting_sms_to (<10-digit number>@vtext.com, Verizon's email-to-SMS gateway)
@@ -397,6 +401,14 @@
                       severity: warning
                     annotations:
                       summary: "Longhorn volume degraded 1h+: {{ '{{' }} $labels.pvc {{ '}}' }}"
+                  # Date-only reminder (the UPS has no data port); repeats every 12h until the
+                  # install date is updated
+                  - alert: UpsBatteryReplace
+                    expr: vector(time()) > {{ ((ups_battery_installed | to_datetime('%Y-%m-%d')).timestamp() + ups_battery_life_months * 30.44 * 86400) | int }}
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "UPS battery installed {{ ups_battery_installed }}: replace it"
 
     # Nightly copy of grafana.db (stars, preferences, UI-made dashboards; provisioned dashboards
     # are in git) to /home/pi/backups/grafana on whichever node runs Grafana, keeping 30 days.
