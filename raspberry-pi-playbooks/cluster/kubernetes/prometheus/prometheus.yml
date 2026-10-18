@@ -4,8 +4,11 @@
   gather_facts: false
   become: true
 
+  # alerting_vars.yml: alerting_smtp_user (Gmail address), alerting_smtp_password (Gmail app
+  # password), alerting_sms_to (<10-digit number>@vtext.com, Verizon's email-to-SMS gateway)
   vars_files:
     - ../../config.yml
+    - ~/source/ansible-files/vars/alerting_vars.yml
 
   environment:
     # The location of the kubeconfig file on the master.
@@ -18,6 +21,21 @@
         name: prometheus-community
         repo_url: "https://prometheus-community.github.io/helm-charts"
 
+    # Mounted by Alertmanager at /etc/alertmanager/secrets/alertmanager-smtp/, so the password
+    # stays out of the Helm values
+    - name: Create Alertmanager SMTP secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: alertmanager-smtp
+            namespace: default
+          stringData:
+            password: "{{ alerting_smtp_password }}"
+      no_log: true
+
     - name: Deploy Prometheus + Grafana Helm chart
       kubernetes.core.helm:
         name: cluster-monitoring
@@ -29,10 +47,62 @@
         create_namespace: true
         state: present
         values:
+          # Texts warning + critical alerts to the phone through Gmail -> Verizon's email-to-SMS
+          # gateway. Info alerts and Watchdog go nowhere; they stay on prometheus.kubecluster/alerts.
           alertmanager:
+            enabled: true
+            alertmanagerSpec:
+              image:
+                pullPolicy: Always
+              secrets:
+                - alertmanager-smtp
+            config:
+              global:
+                smtp_smarthost: smtp.gmail.com:587
+                smtp_from: "{{ alerting_smtp_user }}"
+                smtp_auth_username: "{{ alerting_smtp_user }}"
+                smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
+                smtp_require_tls: true
+              route:
+                receiver: "null"
+                group_by: [alertname, namespace]
+                group_wait: 1m
+                group_interval: 10m
+                repeat_interval: 12h
+                routes:
+                  - receiver: sms
+                    matchers:
+                      - severity=~"warning|critical"
+              # A critical alert silences the matching warning (same as the chart's default config)
+              inhibit_rules:
+                - source_matchers: [severity="critical"]
+                  target_matchers: [severity=~"warning|info"]
+                  equal: [namespace, alertname]
+                - source_matchers: [alertname="InfoInhibitor"]
+                  target_matchers: [severity="info"]
+                  equal: [namespace]
+              receivers:
+                - name: "null"
+                - name: sms
+                  email_configs:
+                    - to: "{{ alerting_sms_to }}"
+                      send_resolved: true
+                      # SMS is ~160 characters: plain text, one short line per alert
+                      headers:
+                        Subject: "{{ '{{' }} .Status | toUpper {{ '}}' }} {{ '{{' }} .CommonLabels.alertname {{ '}}' }}"
+                      html: ""
+                      text: "{{ '{{' }} range .Alerts {{ '}}' }}{{ '{{' }} .Annotations.summary {{ '}}' }}{{ '{{' }} with .Labels.nodename {{ '}}' }} ({{ '{{' }} . {{ '}}' }}){{ '{{' }} end {{ '}}' }}{{ '{{' }} with .Labels.pod {{ '}}' }} ({{ '{{' }} . {{ '}}' }}){{ '{{' }} end {{ '}}' }}\n{{ '{{' }} end {{ '}}' }}"
+
+          # K3s runs these inside the k3s server process, so their scrape targets never exist and
+          # the *Down alerts would always fire; node01 uses SQLite, not etcd
+          kubeControllerManager:
             enabled: false
-            image:
-              pullPolicy: Always
+          kubeScheduler:
+            enabled: false
+          kubeProxy:
+            enabled: false
+          kubeEtcd:
+            enabled: false
 
           grafana:
             image:
@@ -169,8 +239,8 @@
         values:
           fullnameOverride: blackbox-exporter
 
-    # SMART data (wear, spare, temperature, media errors) from every node's NVMe drive. Alertmanager is
-    # off, so the alerts show on Prometheus's /alerts page and the Homelab Nodes dashboard's Disks row.
+    # SMART data (wear, spare, temperature, media errors) from every node's NVMe drive. Its alerts text
+    # the phone (warning/critical) and show on the Homelab Nodes dashboard's Disks row.
     - name: Deploy smartctl exporter
       kubernetes.core.helm:
         name: smartctl-exporter
@@ -261,6 +331,69 @@
               staticConfig:
                 static:
                   - https://nhl.half-built.com/
+
+    # Homelab alerts the chart's default rules don't cover. Warning and critical text the phone.
+    - name: Deploy homelab alert rules
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1
+          kind: PrometheusRule
+          metadata:
+            name: homelab-alerts
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec:
+            groups:
+              - name: homelab
+                rules:
+                  # Single 5s timeouts happen most days; five straight failed minutes is an outage
+                  - alert: NhlOddsSiteDown
+                    expr: probe_success{job="probe/default/nhl-odds-public"} == 0
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: nhl.half-built.com down 5+ min
+                  # kured reboots take a node away for ~2 minutes
+                  - alert: NodeDown
+                    expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+                    for: 10m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "{{ '{{' }} $labels.node {{ '}}' }} not Ready 10+ min"
+                  - alert: NhlOddsDatabaseNoPrimary
+                    expr: absent(cnpg_pg_replication_in_recovery{cluster="nhl-odds-database"} == 0)
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: nhl-odds DB has no primary
+                  # Drains and node reboots take an instance down for a few minutes
+                  - alert: NhlOddsDatabaseInstanceDown
+                    expr: sum(cnpg_collector_up{cluster="nhl-odds-database"}) < 3
+                    for: 20m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "nhl-odds DB {{ '{{' }} $value {{ '}}' }}/3 instances up"
+                  - alert: LonghornVolumeFaulted
+                    expr: longhorn_volume_robustness{state="faulted"} == 1
+                    for: 5m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: "Longhorn volume faulted: {{ '{{' }} $labels.pvc {{ '}}' }}"
+                  # Replicas rebuild for a while after a drain
+                  - alert: LonghornVolumeDegraded
+                    expr: longhorn_volume_robustness{state="degraded"} == 1
+                    for: 1h
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Longhorn volume degraded 1h+: {{ '{{' }} $labels.pvc {{ '}}' }}"
 
     # Nightly copy of grafana.db (stars, preferences, UI-made dashboards; provisioned dashboards
     # are in git) to /home/pi/backups/grafana on whichever node runs Grafana, keeping 30 days.
