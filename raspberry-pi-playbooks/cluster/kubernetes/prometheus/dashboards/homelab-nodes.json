@@ -1457,7 +1457,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (nodename) (smartctl_device_percentage_used{device=~\"nvme.*\"})",
+          "expr": "max by (nodename) (smartctl_device_percentage_used{job=\"smartctl-exporter\"})",
           "legendFormat": "{{nodename}}",
           "refId": "A",
           "instant": true,
@@ -1526,7 +1526,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "min by (nodename) (smartctl_device_available_spare{device=~\"nvme.*\"})",
+          "expr": "min by (nodename) (smartctl_device_available_spare{job=\"smartctl-exporter\"})",
           "legendFormat": "{{nodename}}",
           "refId": "A",
           "instant": true,
@@ -1595,7 +1595,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (nodename) (smartctl_device_temperature{device=~\"nvme.*\", temperature_type=\"current\"})",
+          "expr": "max by (nodename) (smartctl_device_temperature{job=\"smartctl-exporter\", temperature_type=\"current\"})",
           "legendFormat": "{{nodename}}",
           "refId": "A",
           "instant": true,
@@ -1664,7 +1664,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (nodename) (smartctl_device_bytes_written{device=~\"nvme.*\"})",
+          "expr": "max by (nodename) (smartctl_device_bytes_written{job=\"smartctl-exporter\"})",
           "legendFormat": "{{nodename}}",
           "refId": "A",
           "instant": true,
@@ -1726,7 +1726,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (nodename) (increase(smartctl_device_bytes_written{device=~\"nvme.*\"}[1d]))",
+          "expr": "max by (nodename) (increase(smartctl_device_bytes_written{job=\"smartctl-exporter\"}[1d]))",
           "legendFormat": "{{nodename}}",
           "refId": "A"
         }
@@ -1796,7 +1796,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(max by (nodename) (smartctl_device_media_errors{device=~\"nvme.*\"}))",
+          "expr": "sum(max by (nodename) (smartctl_device_media_errors{job=\"smartctl-exporter\"}))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1857,7 +1857,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(max by (nodename) (smartctl_device_critical_warning{device=~\"nvme.*\"}))",
+          "expr": "sum(max by (nodename) (smartctl_device_critical_warning{job=\"smartctl-exporter\"}))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1918,7 +1918,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(max by (nodename) (smartctl_device_smart_status{device=~\"nvme.*\"} == 1))",
+          "expr": "count(max by (nodename) (smartctl_device_smart_status{job=\"smartctl-exporter\"} == 1))",
           "legendFormat": "",
           "refId": "A"
         }

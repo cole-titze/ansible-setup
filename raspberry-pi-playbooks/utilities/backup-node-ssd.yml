@@ -1,0 +1,99 @@
+---
+# The backup Pi boots from an NVMe drive in an ASMedia USB enclosure (/dev/sda).
+# - smartctl exporter on :9633 so the cluster's Prometheus tracks its wear/temperature with the same
+#   SmartCTL* alerts and Disks dashboard row as the nodes (scrape config lives in prometheus.yml).
+# - Clean shutdown: the kernel only flushes the USB disk's cache before power-off/reboot and never
+#   sends it a stop, so the drive logs every power cycle as an unsafe shutdown. manage_shutdown
+#   covers power-off; the kernel has no switch for reboot, so a systemd-shutdown hook stops it.
+- name: Monitor and cleanly stop the backup node's USB SSD
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  vars:
+    smartctl_exporter_version: "0.15.0"
+    smartctl_exporter_sha256: "9a870fe6401748f51f5edcd73057f1c90c0b975f1f48d986eacc61443320276c"
+
+  tasks:
+    - name: Install smartmontools and sg3-utils
+      ansible.builtin.apt:
+        name: [smartmontools, sg3-utils]
+        state: present
+
+    - name: Download smartctl exporter
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus-community/smartctl_exporter/releases/download/v{{ smartctl_exporter_version }}/smartctl_exporter-{{ smartctl_exporter_version }}.linux-arm64.tar.gz"
+        dest: "/tmp/smartctl_exporter-{{ smartctl_exporter_version }}.tar.gz"
+        checksum: "sha256:{{ smartctl_exporter_sha256 }}"
+        mode: '0644'
+
+    - name: Install smartctl exporter binary
+      ansible.builtin.unarchive:
+        src: "/tmp/smartctl_exporter-{{ smartctl_exporter_version }}.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        extra_opts: [--strip-components=1, --wildcards, '*/smartctl_exporter']
+        mode: '0755'
+      notify: Restart smartctl exporter
+
+    # Root because smartctl needs raw device access
+    - name: Install smartctl exporter service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/smartctl-exporter.service
+        content: |
+          [Unit]
+          Description=Prometheus smartctl exporter
+          After=network-online.target
+
+          [Service]
+          ExecStart=/usr/local/bin/smartctl_exporter --smartctl.path=/usr/sbin/smartctl --smartctl.device-include=sda --web.listen-address=:9633
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+      notify: Restart smartctl exporter
+
+    - name: Enable smartctl exporter
+      ansible.builtin.systemd:
+        name: smartctl-exporter
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Stop the USB SSD on power-off
+      ansible.builtin.copy:
+        dest: /etc/udev/rules.d/60-usb-ssd-shutdown.rules
+        content: |
+          ACTION=="add", SUBSYSTEM=="scsi_disk", ATTR{manage_shutdown}="1"
+        mode: '0644'
+
+    - name: Apply manage_shutdown now
+      ansible.builtin.shell: for f in /sys/class/scsi_disk/*/manage_shutdown; do echo 1 > "$f"; done
+      changed_when: false
+
+    - name: Create systemd-shutdown hook directory
+      ansible.builtin.file:
+        path: /usr/lib/systemd/system-shutdown
+        state: directory
+        mode: '0755'
+
+    # Runs after filesystems are read-only, just before the reboot syscall
+    - name: Stop the USB SSD on reboot
+      ansible.builtin.copy:
+        dest: /usr/lib/systemd/system-shutdown/usb-ssd-stop
+        content: |
+          #!/bin/sh
+          [ "$1" = reboot ] || exit 0
+          /usr/bin/sg_sync /dev/sda
+          # "temporary" only changes the kernel flag: stops its final cache flush from waking the drive
+          for f in /sys/class/scsi_disk/*/cache_type; do echo "temporary write through" > "$f"; done
+          /usr/bin/sg_start --stop /dev/sda
+        mode: '0755'
+
+  handlers:
+    - name: Restart smartctl exporter
+      ansible.builtin.systemd:
+        name: smartctl-exporter
+        state: restarted
+        daemon_reload: true

@@ -372,7 +372,7 @@ nodes += [
 y += 8
 
 # smartctl exporter (prometheus.yml); max by nodename collapses the old and new pod's series after a rollout
-SMART = 'device=~"nvme.*"'
+SMART = 'job="smartctl-exporter"'
 nodes.append(row("Disks (SMART)", y)); y += 1
 nodes += [
     stat("SMART alerts firing", [tgt('count(ALERTS{alertname=~"SmartCTL.*", alertstate="firing"}) or vector(0)')],

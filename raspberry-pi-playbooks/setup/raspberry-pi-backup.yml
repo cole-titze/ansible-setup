@@ -121,3 +121,5 @@
   import_playbook: ../utilities/backup-node-maintenance.yml
 - name: Pull nightly nhl-odds dumps off the cluster
   import_playbook: ../utilities/backup-node-db-pull.yml
+- name: Monitor and cleanly stop the USB SSD
+  import_playbook: ../utilities/backup-node-ssd.yml

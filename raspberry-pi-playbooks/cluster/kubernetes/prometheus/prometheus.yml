@@ -317,6 +317,28 @@
                 labels:
                   severity: warning
 
+    # The backup Pi's USB SSD (not in the cluster; exporter installed by utilities/backup-node-ssd.yml).
+    # Same job label as the in-cluster exporter so the SmartCTL* alerts and Disks row cover it.
+    - name: Scrape the backup Pi's smartctl exporter
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1alpha1
+          kind: ScrapeConfig
+          metadata:
+            name: smartctl-backup-pi
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec:
+            staticConfigs:
+              - targets: ["{{ hostvars['dockerpi_backup'].ansible_host }}:9633"]
+                labels:
+                  nodename: dockerpibackup
+            relabelings:
+              - targetLabel: job
+                replacement: smartctl-exporter
+
     - name: Probe the public nhl-odds site
       kubernetes.core.k8s:
         state: present
