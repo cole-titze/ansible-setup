@@ -34,9 +34,18 @@ ssh -i "$HOME/.ssh/node01" -o BatchMode=yes -o ExitOnForwardFailure=yes -N \
 tunnel_pid=$!
 KUBECONFIG="$(mktemp -t weekly-kubeconfig)"
 export KUBECONFIG
-trap 'kill $tunnel_pid 2>/dev/null; rm -f "$KUBECONFIG"' EXIT
+# The playbooks' vars live in iCloud (~/source/ansible-files), which macOS TCC blocks for Claude's
+# Bash under launchd. Ansible's own Python can read it when run straight from here, so copy vars/
+# to a private temp dir for the run; the cluster playbooks read ANSIBLE_FILES_PATH when it's set.
+ANSIBLE_FILES_PATH="$(mktemp -d -t weekly-ansible-files)"
+export ANSIBLE_FILES_PATH
+trap 'kill $tunnel_pid 2>/dev/null; rm -f "$KUBECONFIG"; rm -rf "$ANSIBLE_FILES_PATH"' EXIT
 sed "s|server: https://10.42.0.20:6443|server: https://127.0.0.1:$KUBE_TUNNEL_PORT|" "$HOME/.kube/config" >"$KUBECONFIG"
 for _ in $(seq 1 15); do nc -z 127.0.0.1 "$KUBE_TUNNEL_PORT" 2>/dev/null && break; sleep 1; done
+if ! ansible localhost -m ansible.builtin.copy \
+  -a "src=$HOME/source/ansible-files/vars dest=$ANSIBLE_FILES_PATH/ mode=0600 directory_mode=0700" >>"$LOG" 2>&1; then
+  notify "Weekly homelab upgrade" "Couldn't copy the ansible vars; playbooks will fail. See $LOG"
+fi
 
 {
   echo "== Weekly upgrade $(date '+%Y-%m-%d %H:%M:%S')"
@@ -47,7 +56,7 @@ for _ in $(seq 1 15); do nc -z 127.0.0.1 "$KUBE_TUNNEL_PORT" 2>/dev/null && brea
 Write the final summary to $SUMMARY as well as printing it." \
     --permission-mode bypassPermissions \
     --add-dir "$HOME/.claude/skills" \
-    --add-dir "$HOME/source/ansible-files" \
+    --add-dir "$ANSIBLE_FILES_PATH" \
     --output-format stream-json --verbose
 } >>"$LOG" 2>&1
 status=$?

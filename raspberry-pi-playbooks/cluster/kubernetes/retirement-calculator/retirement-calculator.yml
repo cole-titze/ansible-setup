@@ -8,7 +8,7 @@
   become: true
 
   vars:
-    ansible_files_path: "~/source/ansible-files"
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
 
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml

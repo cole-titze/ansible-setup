@@ -7,9 +7,10 @@
   vars:
     portainer_namespace: portainer
     portainer_hostname: "portainer.kubecluster"
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
 
   vars_files:
-    - "~/source/ansible-files/vars/cluster_vars.yml"
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml

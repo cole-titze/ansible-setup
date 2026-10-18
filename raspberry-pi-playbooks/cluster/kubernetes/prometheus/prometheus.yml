@@ -4,11 +4,14 @@
   gather_facts: false
   become: true
 
+  vars:
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
+
   # alerting_vars.yml: alerting_smtp_user (Gmail address), alerting_smtp_password (Gmail app
   # password), alerting_sms_to (<10-digit number>@vtext.com, Verizon's email-to-SMS gateway)
   vars_files:
     - ../../config.yml
-    - ~/source/ansible-files/vars/alerting_vars.yml
+    - "{{ ansible_files_path }}/vars/alerting_vars.yml"
 
   environment:
     # The location of the kubeconfig file on the master.

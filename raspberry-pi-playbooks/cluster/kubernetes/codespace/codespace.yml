@@ -4,7 +4,7 @@
   gather_facts: false
   become: true
   vars:
-    ansible_files_path: "~/source/ansible-files"
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
   vars_files:
     - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 

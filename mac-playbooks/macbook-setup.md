@@ -70,15 +70,32 @@ VIRTUAL_ENV=$PWD/.venv uv pip install -r game_predictor/requirements.txt -r game
 ```
 
 ## 6b. Scheduled jobs (control machine only)
-Run on the Mac that stays on as the homelab control machine (one Mac only, or the jobs run twice):
+Run on the Mac that stays on as the homelab control machine (one Mac only, or the jobs run twice).
+
+Before installing, check what the jobs need:
+- **Vars files**: `ls ~/source/ansible-files/vars` shows `cluster_vars.yml`, `nhl_vars.yml`, `retirement_vars.yml` and `alerting_vars.yml`. They come down with iCloud (section 2), so nothing to restore by hand. If one is missing, iCloud hasn't finished syncing; wait.
+- **Logins and keys**: `claude` logged in (Start here), `gh auth status` OK, and `~/.ssh` + `~/.kube` restored (section 2). Check `ssh -i ~/.ssh/node01 -o BatchMode=yes pi@10.42.0.20 true` and `kubectl get nodes`.
+- **Docker Desktop** set to start at login (Settings → General). The restore drill starts it if it's closed, but it must be installed.
+
+Install the jobs:
 ```bash
 cd ~/source/repos/ansible-setup && ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
-It installs two launchd LaunchAgents that run as you, with your tools, keys and logins:
-- `com.coletitze.nightly-backup`: daily 3:10, runs `mac-playbooks/backup/scripts/Backup.sh` (after the cluster's 1:00 nhl-odds dump, 1:30 Grafana backup and kured's 2:00-2:55 reboots).
+It installs four launchd LaunchAgents that run as you, with your tools, keys and logins:
+- `com.coletitze.nightly-backup`: daily 3:10, runs `mac-playbooks/backup/scripts/Backup.sh` (after the cluster's nhl-odds dumps, the 1:30 Grafana backup and kured's 2:00-2:55 reboots).
+- `com.coletitze.backup-stale-check`: daily 9:00, warns if a backup didn't reach iCloud overnight.
+- `com.coletitze.restore-drill`: Saturdays 4:00, restores the newest iCloud backups into a throwaway container to prove they work.
 - `com.coletitze.weekly-upgrade`: Sundays 10:00, runs Claude Code headless with `scripts/weekly-upgrade-prompt.md` (the weekly jobs check, `/k8s-major-upgrade` and `/nhl-odds-security`, applying changes unattended).
 
-Logs and the weekly summary go to `~/Library/Logs/homelab/`; a macOS notification fires on failure (and when the weekly run finishes). Test one now with `launchctl kickstart gui/$(id -u)/com.coletitze.nightly-backup`. If a job can't read iCloud Drive or `~/.ssh`, give `/bin/bash` Full Disk Access in System Settings → Privacy & Security **(manual)**.
+macOS limits launchd jobs, and the scripts already work around both limits, so don't grant Full Disk Access:
+- **iCloud Drive**: launchd's bash, docker and Claude's Bash get `Operation not permitted`; only Ansible's Python can read it. So the backup jobs do their iCloud work in playbooks, and the weekly upgrade has Ansible copy `vars/` to a private temp dir (deleted after the run) and points the cluster playbooks at it with `ANSIBLE_FILES_PATH`.
+- **Local Network**: under launchd only Apple's binaries reach `10.42.0.x`, so the weekly upgrade tunnels the K3s API over ssh.
+
+Test each job once while you're at the Mac. Approve any macOS prompt (Python wanting iCloud Drive access, Terminal or osascript wanting to post notifications):
+```bash
+for j in backup-stale-check nightly-backup restore-drill; do launchctl kickstart gui/$(id -u)/com.coletitze.$j; done
+```
+Then check `~/Library/Logs/homelab/<job>-<date>.log`: each ends with `failed=0`, or `== Done` for the nightly backup. Leave the weekly upgrade to its Sunday run: it changes the cluster. Logs and the weekly summary go to `~/Library/Logs/homelab/`, and a macOS notification fires on failure (and when the weekly run finishes).
 
 ## 7. Optional / personal
 Install only if wanted: ChatGPT, Firefox, Discord, Minecraft.

@@ -15,7 +15,7 @@
   become: true
 
   vars:
-    ansible_files_path: "~/source/ansible-files"
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
     local_backup_path: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/nhl.dump"
     # The restore Job reads the dump from this worker's disk. kubectl cp/exec of a multi-GB dump
     # into the pod times out (2026-10-17 rebuild), so nothing streams through the API server.
