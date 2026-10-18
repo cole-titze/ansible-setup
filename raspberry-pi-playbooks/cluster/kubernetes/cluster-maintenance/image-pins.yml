@@ -2,7 +2,8 @@
 # Included by the app playbooks before they render their templates. Sets image_pins
 # (pin name -> repo@digest) from ConfigMap cluster-maintenance/image-pins, the one
 # source of truth the nightly updater also moves, so re-running a playbook keeps
-# whatever is live. Names missing from it (fresh cluster) start at the current :latest.
+# whatever is live. Names missing from it (fresh cluster) start at the current :prod,
+# the newest build that passed CI.
 #
 # Needs image_pin_repos: pin name -> ghcr repo, e.g. nhl-odds-webapi: cole-titze/nhl-odds/webapi
 
@@ -20,13 +21,13 @@
     name: image-pins
   register: image_pins_cm
 
-- name: Resolve unpinned images to their current :latest digest.
+- name: Resolve unpinned images to their current :prod digest.
   ansible.builtin.shell: |
     set -o pipefail
     tok=$(curl -fsS "https://ghcr.io/token?scope=repository:{{ item.value }}:pull" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
     curl -fsSI -H "Authorization: Bearer $tok" \
       -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
-      "https://ghcr.io/v2/{{ item.value }}/manifests/latest" | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }' | grep '^sha256:'
+      "https://ghcr.io/v2/{{ item.value }}/manifests/prod" | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" { print $2 }' | grep '^sha256:'
   args:
     executable: /bin/bash
   loop: "{{ image_pin_repos | dict2items | rejectattr('key', 'in', image_pins_cm.resources[0].data | default({}) if image_pins_cm.resources else {}) | list }}"

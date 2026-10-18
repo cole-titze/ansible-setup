@@ -5,7 +5,7 @@
 #   image-pin.sh status
 #   image-pin.sh rollback <name>          back to <name>.previous and hold it there
 #   image-pin.sh set <name> <tag|digest>  e.g. a commit tag like 0f1c2bb; holds it
-#   image-pin.sh release <name>           drop the hold; the 4:00 run moves it to :latest again
+#   image-pin.sh release <name>           drop the hold; the 4:00 run moves it to :prod again
 set -euo pipefail
 
 pins() { kubectl get configmap -n cluster-maintenance image-pins -o json | jq -c '.data // {}'; }

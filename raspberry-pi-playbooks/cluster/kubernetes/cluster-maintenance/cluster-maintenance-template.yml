@@ -132,7 +132,7 @@ data:
     exit $status
 {% endraw %}
 ---
-# Runs nightly at 4am CT: moves image pins to the newest promoted build and restarts
+# Runs nightly at 4am CT: moves image pins to the newest promoted (:prod) build and restarts
 # the unpinned deployments. StatefulSets are left alone — they hit the CNPG database
 # and force an unnecessary primary switchover.
 apiVersion: batch/v1
@@ -148,19 +148,20 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 2
+      # No retries: a rerun would restart every unpinned deployment again
+      backoffLimit: 0
       template:
         spec:
           serviceAccountName: nightly-updater
-          restartPolicy: OnFailure
+          restartPolicy: Never
           containers:
             - name: updater
               # kubectl + curl + jq; keep in step with the K3s minor
               image: alpine/k8s:1.36.5
               env:
-                # The tag a build must carry to reach prod
+                # CI moves :prod to a build only after its tests, checks and smoke test pass
                 - name: PROMOTE_TAG
-                  value: latest
+                  value: prod
               command: ["/bin/sh", "/scripts/update.sh"]
               volumeMounts:
                 - name: script
