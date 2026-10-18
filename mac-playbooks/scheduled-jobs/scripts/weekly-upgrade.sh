@@ -28,12 +28,14 @@ cd "$HOME/source/repos" || exit 1
 {
   echo "== Weekly upgrade $(date '+%Y-%m-%d %H:%M:%S')"
   # Unattended: no one is there to approve tool calls. The prompt carries the safety rules.
+  # stream-json writes each step to the log as it happens, so a stuck run shows where it stopped.
   claude -p "$(cat "$PROMPT_FILE")
 
 Write the final summary to $SUMMARY as well as printing it." \
     --permission-mode bypassPermissions \
     --add-dir "$HOME/.claude/skills" \
-    --add-dir "$HOME/source/ansible-files"
+    --add-dir "$HOME/source/ansible-files" \
+    --output-format stream-json --verbose
 } >>"$LOG" 2>&1
 status=$?
 

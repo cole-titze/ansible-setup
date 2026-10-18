@@ -19,7 +19,7 @@ PART 3 — /nhl-odds-security, then fix what it can
 Read ~/.claude/skills/nhl-odds-security/SKILL.md and run Steps 1–7 against this morning's scan. Then apply the fixes:
 - Actionable app-dependency CVEs (fix version exists) → bump the dependency.
 - OS CVEs fixable by a base-image bump → bump the base image (respect the Dependabot ignores for .NET/Node/Postgres majors: report those as "available", don't move them).
-- Stale trivy-action / Trivy pins → update both `uses:` lines to the new tag's commit SHA (never a bare tag or @master) and TRIVY_VERSION together, as Step 6 says.
+- Stale trivy-action / Trivy pins → update both `uses:` lines to the new tag's commit SHA (never a bare tag or the master branch) and TRIVY_VERSION together, as Step 6 says.
 - Workflow warnings with a clear fix → fix them, following Step 7's pitfalls.
 - Code findings from Step 5 stay report-only, as the skill says — don't edit code for them.
 Do these on a local branch and run the repo's checks from k8s-major-upgrade's Dependabot section (nhl-odds: `dotnet build`, `dotnet test`, `cd frontend && npm ci && npm run build && npm run a11y`; plus a Docker build of any image whose Dockerfile changed). If everything passes, push to main. If checks fail and the fix isn't obvious, don't push; leave the branch and report.
