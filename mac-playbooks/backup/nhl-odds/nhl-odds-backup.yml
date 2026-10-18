@@ -11,7 +11,10 @@
     icloud_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
     remote_backup_dir: /home/pi/backups/nhl-odds/
     staging_keep: 15
-    icloud_keep: 15
+    # iCloud keeps the newest 7 dumps plus the newest dump of each of the 4 weeks before them,
+    # so about a month of history in 11 files (~2.4 GB each)
+    icloud_daily_keep: 7
+    icloud_weekly_keep: 4
     # Only nightly dumps; older hand-named files (nhl-20260415.dump, *-pre-repair) sort wrong and are left alone
     dump_pattern: "nhl-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].dump"
     # Ansible's default ssh_args include -C; dumps are already compressed, so skip it
@@ -82,7 +85,7 @@
         dest: "{{ icloud_backup_dir }}"
         force: false
         mode: "0644"
-      loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[:icloud_keep] }}"
+      loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[:icloud_daily_keep] }}"
       loop_control:
         label: "{{ item.path | basename }}"
       delegate_to: localhost
@@ -97,11 +100,31 @@
       delegate_to: localhost
       run_once: true
 
-    - name: Remove all but the newest iCloud backups (names are dated)
+    # Names are dated, so newest first by name. Past the daily ones, keep the first (newest) dump
+    # seen for each ISO week until icloud_weekly_keep weeks are kept.
+    - name: Pick the iCloud backups to keep
+      ansible.builtin.set_fact:
+        icloud_kept: >-
+          {%- set ns = namespace(weeks=[], keep=[]) -%}
+          {%- for f in icloud_backups.files | sort(attribute='path', reverse=true) -%}
+            {%- set week = (f.path | basename)[4:14] | to_datetime('%Y-%m-%d') -%}
+            {%- set week = week.strftime('%G-%V') -%}
+            {%- if loop.index <= icloud_daily_keep -%}
+              {%- set ns.keep = ns.keep + [f.path] -%}
+            {%- elif week not in ns.weeks and ns.weeks | length < icloud_weekly_keep -%}
+              {%- set ns.weeks = ns.weeks + [week] -%}
+              {%- set ns.keep = ns.keep + [f.path] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.keep }}
+      delegate_to: localhost
+      run_once: true
+
+    - name: Remove the other iCloud backups
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
-      loop: "{{ (icloud_backups.files | sort(attribute='path', reverse=true))[icloud_keep:] }}"
+      loop: "{{ icloud_backups.files | rejectattr('path', 'in', icloud_kept) | list }}"
       loop_control:
         label: "{{ item.path | basename }}"
       delegate_to: localhost

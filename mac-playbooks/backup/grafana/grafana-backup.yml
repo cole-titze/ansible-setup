@@ -9,6 +9,7 @@
   vars:
     local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/grafana/"
     remote_backup_dir: /home/pi/backups/grafana/
+    local_keep: 35
 
   tasks:
     - name: Ensure local backup directory exists
@@ -39,3 +40,24 @@
         dest: "{{ local_backup_dir }}"
         flat: true
       loop: "{{ backup_files.files | default([]) }}"
+
+    - name: Find local Grafana backups
+      ansible.builtin.find:
+        paths: "{{ local_backup_dir }}"
+        patterns: "grafana-*.db"
+        file_type: file
+      register: local_backups
+      delegate_to: localhost
+      run_once: true
+
+    # Names are dated, so newest first by name. Keep more than the node's 30 days so a deleted
+    # file is never one the next run would fetch again.
+    - name: Remove all but the newest local Grafana backups
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (local_backups.files | sort(attribute='path', reverse=true))[local_keep:] }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      delegate_to: localhost
+      run_once: true
