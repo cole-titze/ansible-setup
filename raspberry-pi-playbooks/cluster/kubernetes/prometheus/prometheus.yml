@@ -114,6 +114,19 @@
           grafana:
             image:
               pullPolicy: Always
+            # Datasource ConfigMaps (e.g. Loki, loki/loki.yml) must be on disk when Grafana starts: the
+            # sidecar's hot reload logs in with the secret's admin password, which the UI has changed.
+            # As a native sidecar it finishes its first sync (startupProbe) before Grafana starts.
+            sidecar:
+              datasources:
+                initDatasources: true
+                restartPolicy: Always
+                startupProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8082
+                  periodSeconds: 2
+                  failureThreshold: 60
             # Keeps stars, preferences and UI-made dashboards across the nightly restarts.
             # Recreate: the RWO Longhorn volume can't attach to old and new pods at once.
             persistence:

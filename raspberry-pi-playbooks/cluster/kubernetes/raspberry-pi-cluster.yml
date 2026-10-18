@@ -247,6 +247,10 @@
   import_playbook: prometheus/prometheus.yml
   tags: ['prometheus']
 
+- name: Set up Loki + Alloy logging.
+  import_playbook: loki/loki.yml
+  tags: ['loki']
+
 - name: Set up NHL Odds.
   import_playbook: nhl-odds/nhl-odds.yml
   tags: ['nhl-odds']
