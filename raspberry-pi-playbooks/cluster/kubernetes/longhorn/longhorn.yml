@@ -40,6 +40,10 @@
             defaultDataPath: "/var/lib/longhorn"
             # Live-upgrade volume engines after a Longhorn upgrade, one volume per node at a time.
             concurrentAutomaticEngineUpgradePerNodeLimit: 1
+            # The CNPG volumes have 1 replica (CNPG keeps its own 3 copies), so the default
+            # block-if-contains-last-replica blocks every worker drain and kured skips its reboots.
+            # This lets a drain through once the evicted DB pod's volume has detached.
+            nodeDrainPolicy: allow-if-replica-is-stopped
 
     - name: Exclude control-plane node from Longhorn manager DaemonSet
       ansible.builtin.shell: |
