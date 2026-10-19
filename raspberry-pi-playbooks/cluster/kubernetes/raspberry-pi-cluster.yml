@@ -73,6 +73,11 @@
           cluster-cidr: 10.52.0.0/16
           service-cidr: 10.53.0.0/16
           flannel-backend: host-gw
+          # Secrets are stored encrypted (aescbc; key in /var/lib/rancher/k3s/server/cred/
+          # encryption-config.json). Never drop this line on a running cluster: the API could no
+          # longer read the stored secrets. To turn it on for an existing cluster: restart k3s, then
+          # `k3s secrets-encrypt rotate-keys` rewrites the old plaintext secrets.
+          secrets-encryption: true
         mode: '0644'
 
     - name: Install K3s on control plane (takes a while).
