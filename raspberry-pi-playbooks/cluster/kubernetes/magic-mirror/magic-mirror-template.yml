@@ -14,10 +14,13 @@ spec:
       labels:
         app: magic-mirror
     spec:
-      # Still root: MagicMirror writes config/basepath.js and js/positions.js into the
-      # root-owned image at startup, so non-root needs an image change first
+      # The image runs as uid 1000 (owns only config/ and js/, where MagicMirror writes
+      # basepath.js and positions.js at startup), so the root stays writable
       automountServiceAccountToken: false
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
