@@ -14,12 +14,22 @@ spec:
       labels:
         app: magic-mirror
     spec:
+      # Still root: MagicMirror writes config/basepath.js and js/positions.js into the
+      # root-owned image at startup, so non-root needs an image change first
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: magic-mirror
           image: ghcr.io/cole-titze/containers/magic-mirror:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8082
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           livenessProbe:
             tcpSocket:
               port: 8082

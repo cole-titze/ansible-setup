@@ -27,12 +27,36 @@ spec:
               app: retirement-calculator
           matchLabelKeys:
             - pod-template-hash
+      # nginx as its unprivileged "nginx" user (101) on a read-only root; port 80 is still
+      # bindable via the namespaced unprivileged-port sysctl
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
       containers:
         - name: retirement-calculator
           image: "{{ image_pins['retirement-calculator'] }}"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /
@@ -52,6 +76,13 @@ spec:
             limits:
               cpu: "100m"
               memory: "64Mi"
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 
 ---
 apiVersion: v1
@@ -137,6 +168,13 @@ spec:
               app: cloudflared
           matchLabelKeys:
             - pod-template-hash
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:2026.10.1
@@ -157,6 +195,11 @@ spec:
           ports:
             - name: metrics
               containerPort: 20241
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           readinessProbe:
             httpGet:
               path: /ready

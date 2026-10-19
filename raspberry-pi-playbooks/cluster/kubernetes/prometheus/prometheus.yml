@@ -493,6 +493,11 @@
                 template:
                   spec:
                     restartPolicy: OnFailure
+                    # Root without capabilities: enough to write the root-owned hostPath dir
+                    automountServiceAccountToken: false
+                    securityContext:
+                      seccompProfile:
+                        type: RuntimeDefault
                     affinity:
                       podAffinity:
                         requiredDuringSchedulingIgnoredDuringExecution:
@@ -508,6 +513,11 @@
                           - name: TZ
                             value: America/Chicago
                         command: ["/bin/sh", "-c"]
+                        securityContext:
+                          allowPrivilegeEscalation: false
+                          readOnlyRootFilesystem: true
+                          capabilities:
+                            drop: ["ALL"]
                         args:
                           - |
                             set -e
@@ -532,7 +542,11 @@
                             readOnly: true
                           - name: backup-storage
                             mountPath: /backups
+                          - name: tmp
+                            mountPath: /tmp
                     volumes:
+                      - name: tmp
+                        emptyDir: {}
                       - name: grafana-storage
                         persistentVolumeClaim:
                           claimName: cluster-monitoring-grafana

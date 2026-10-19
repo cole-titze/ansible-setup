@@ -210,6 +210,13 @@ spec:
         spec:
           serviceAccountName: nightly-updater
           restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: updater
               # kubectl + curl + jq; keep in step with the K3s minor
@@ -218,11 +225,23 @@ spec:
                 # CI moves :prod to a build only after its tests, checks and smoke test pass
                 - name: PROMOTE_TAG
                   value: prod
+                # kubectl's discovery cache
+                - name: HOME
+                  value: /tmp
               command: ["/bin/sh", "/scripts/update.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
               volumeMounts:
                 - name: script
                   mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
           volumes:
+            - name: tmp
+              emptyDir: {}
             - name: script
               configMap:
                 name: nightly-updater-script
