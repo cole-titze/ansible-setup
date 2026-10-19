@@ -105,7 +105,7 @@ data:
     done
 
     pins=$(kubectl get configmap -n cluster-maintenance image-pins -o json | jq -c '.data // {}') || exit 1
-    for ns in default nhl-odds portainer retirement-calculator; do
+    for ns in default magic-mirror nhl-odds portainer retirement-calculator; do
       objs=$(kubectl get deployment,cronjob -n "$ns" -o json) || { status=1; continue; }
       # "<kind>/<name> <container>=<image>" for every pinned container that's off its pin
       printf %s "$objs" | jq -r --argjson pins "$pins" '
