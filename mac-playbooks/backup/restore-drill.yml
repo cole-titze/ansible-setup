@@ -3,6 +3,7 @@
 # - nhl-odds: newest dump -> throwaway postgres:18 container (prod's major), then sanity checks
 # - Grafana: SQLite integrity check on the newest grafana-*.db (dashboards are in git; it holds stars + users)
 # - MacBook: newest backup folder has the kubeconfig, ssh keys and Claude settings
+# - Vault: the login keychain's vault password opens every ansible-files vars file
 # launchd's bash and docker can't read iCloud Drive, Ansible's Python can, so Ansible copies the
 # files out to a scratch folder first. Leaves nothing behind.
 - name: Restore drill for the iCloud backups
@@ -171,6 +172,37 @@
           when: newest['macbook'] != ''
           ansible.builtin.debug:
             msg: "macbook: {{ newest['macbook'] | basename }}: {{ mac_files.results | map(attribute='matched') | zip(['kube', 'ssh', 'claude']) | map('reverse') | map('join', ' ') | join(', ') }} files"
+
+        # ---- Vault ------------------------------------------------------------------------
+        # A rebuilt Mac needs the vault password (Apple Passwords) in the login keychain;
+        # this proves the keychain copy still opens every vars file.
+        - name: Find the vars files
+          ansible.builtin.find:
+            paths: "{{ home }}/source/ansible-files/vars"
+            patterns: "*.yml"
+          register: vars_files
+
+        - name: Check the vault password opens each vars file
+          ansible.builtin.include_vars:
+            file: "{{ item.path }}"
+            name: vault_check
+          loop: "{{ vars_files.files }}"
+          register: vault_check
+          ignore_errors: true
+          no_log: true
+
+        - name: Record vault failures
+          vars:
+            undecryptable: "{{ vault_check.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
+              | map(attribute='item.path') | map('basename') | list }}"
+          ansible.builtin.set_fact:
+            vault_failed: "{{ undecryptable }}"
+            failures: "{{ failures + (['vault: no vars files found'] if vars_files.matched == 0 else [])
+              + (undecryptable | map('regex_replace', '^', 'vault: can not decrypt ') | list) }}"
+
+        - name: Show the vault result
+          ansible.builtin.debug:
+            msg: "vault: {{ vars_files.matched - vault_failed | length }}/{{ vars_files.matched }} vars files decrypt"
 
       always:
         - name: Remove the throwaway Postgres

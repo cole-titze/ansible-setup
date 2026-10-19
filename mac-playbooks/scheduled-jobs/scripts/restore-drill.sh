@@ -6,6 +6,8 @@ set -uo pipefail
 
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES   # Python fork crashes on macOS, see macbook-setup.md
+# Runs outside the repo, so ansible.cfg (and its vault_password_file) isn't read
+export ANSIBLE_VAULT_PASSWORD_FILE="$HOME/source/repos/ansible-setup/vault-pass.sh"
 
 REPO="$HOME/source/repos/ansible-setup"
 LOG_DIR="$HOME/Library/Logs/homelab"
