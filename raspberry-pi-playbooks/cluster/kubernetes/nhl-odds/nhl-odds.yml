@@ -68,6 +68,36 @@
           nhl-odds-predictor: cole-titze/nhl-odds/predictor
           nhl-odds-scheduler-k8s: cole-titze/nhl-odds/scheduler-k8s
 
+    # Passwords for the least-privilege roles (Cluster.managed.roles) live only in the cluster:
+    # created once at random, never overwritten. CNPG sets each role's password from its secret.
+    - name: Read DB role secrets.
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: nhl-odds
+        name: "nhl-odds-{{ item }}-credentials"
+      loop: [web, writer, backup]
+      register: db_role_secrets
+
+    - name: Create missing DB role secrets.
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "nhl-odds-{{ item.item }}-credentials"
+            namespace: nhl-odds
+            labels:
+              cnpg.io/reload: "true"
+          type: kubernetes.io/basic-auth
+          stringData:
+            username: "nhl_{{ item.item }}"
+            password: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=32) }}"
+      loop: "{{ db_role_secrets.results }}"
+      loop_control:
+        label: "nhl-odds-{{ item.item }}-credentials"
+      when: item.resources | length == 0
+
     - name: Apply nhl-odds manifests.
       kubernetes.core.k8s:
         definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"
@@ -98,6 +128,17 @@
       ansible.builtin.command: >
         kubectl get pod -n nhl-odds -l cnpg.io/cluster=nhl-odds-database,role=primary -o jsonpath='{.items[0].metadata.name}'
       register: db_pod_name
+      changed_when: false
+
+    # Dumps carry the JobStatus grant to nhl_web, so a restore fails if CNPG hasn't created the roles yet
+    - name: Wait for the managed DB roles
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -tAc "SELECT count(*) FROM pg_roles WHERE rolname IN ('nhl_web','nhl_writer','nhl_backup')"
+      register: db_role_count
+      until: db_role_count.stdout | trim == '3'
+      retries: 30
+      delay: 10
       changed_when: false
 
     - name: Check if database already has data
@@ -240,6 +281,13 @@
       ansible.builtin.shell: >
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
         psql -U postgres -c "ALTER USER nhl_app WITH PASSWORD '{{ nhl_odds_postgres_password }}'"
+      changed_when: false
+
+    # The webapi's only write: admin job requests insert/update a JobStatus row
+    - name: Let nhl_web request jobs
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -d nhl -v ON_ERROR_STOP=1 -c 'GRANT INSERT, UPDATE ON "JobStatus" TO nhl_web'
       changed_when: false
 
     - name: Restart webapi and scheduler to pick up credentials

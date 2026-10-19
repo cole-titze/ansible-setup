@@ -29,8 +29,8 @@ stringData:
   admin-api-key: "{{ nhl_odds_admin_api_key }}"
 
 ---
-# App-user credentials. Everything (webapi, scheduler, cronjobs, backup) auths as nhl_app.
-# Also consumed by CNPG at bootstrap as the initial app user (see Cluster.bootstrap.initdb.secret).
+# Owner credentials (nhl_app owns the database and every table). Only CNPG bootstrap and schema
+# changes use it; workloads connect as the least-privilege roles in Cluster.managed.roles.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -93,6 +93,26 @@ spec:
         configMapRefs:
           - name: nhl-odds-schema
             key: create-tables.sql
+  # Least-privilege login roles; the playbook creates their password secrets once. The built-in
+  # pg_read/write_all_data roles also cover tables added later by hand (no per-table grants).
+  # nhl_web additionally gets INSERT/UPDATE on "JobStatus" (admin job requests) from the playbook.
+  managed:
+    roles:
+      - name: nhl_web       # webapi: reads everything, writes only JobStatus
+        login: true
+        inRoles: [pg_read_all_data]
+        passwordSecret:
+          name: nhl-odds-web-credentials
+      - name: nhl_writer    # entry/predictor/scheduler jobs: read + write rows, no DDL
+        login: true
+        inRoles: [pg_read_all_data, pg_write_all_data]
+        passwordSecret:
+          name: nhl-odds-writer-credentials
+      - name: nhl_backup    # pg_dump
+        login: true
+        inRoles: [pg_read_all_data]
+        passwordSecret:
+          name: nhl-odds-backup-credentials
   storage:
     size: 30Gi
     storageClass: longhorn-db
@@ -175,10 +195,10 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nhl-odds-app-credentials
+                  name: nhl-odds-web-credentials
                   key: password
             - name: NHL_DATABASE
-              value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+              value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_web;Password=$(POSTGRES_PASSWORD)"
             - name: ADMIN_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -413,10 +433,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Daily odds fetch — NextDayOdds (6am CT) — replaces scheduler/daily-odds-fetch.sh step 1
@@ -457,10 +477,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
                 - name: ODDS_API_KEY
                   valueFrom:
                     secretKeyRef:
@@ -510,10 +530,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
                 - name: ODDS_API_KEY
                   valueFrom:
                     secretKeyRef:
@@ -559,10 +579,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Lineup projections article snapshot (every 30 min, 10am-11:30pm CT) — LineupSnapshot
@@ -612,10 +632,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
@@ -652,10 +672,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_app;Password=$(POSTGRES_PASSWORD)"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
 
 ---
 # CronJob: Weekly Light load test (Sunday 12:30am CT, clear of the 1am backups, the 2am kured
@@ -695,10 +715,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE_URL
-                  value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+                  value: "postgresql://nhl_writer:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
 
 ---
 # CronJob: Rolls the blackbox probe of the public site (prometheus/prometheus.yml) up into one
@@ -740,10 +760,10 @@ spec:
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE_URL
-                  value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+                  value: "postgresql://nhl_writer:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
 
 {% for host in groups['nodes'] %}
 ---
@@ -785,7 +805,7 @@ spec:
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: nhl-odds-app-credentials
+                      name: nhl-odds-backup-credentials
                       key: password
               command: ["/bin/sh", "-c"]
               args:
@@ -793,7 +813,7 @@ spec:
                   set -e
                   mkdir -p /backups
                   BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
-                  pg_dump -h nhl-odds-database-ro -U nhl_app -Fc nhl > "$BACKUP_FILE"
+                  pg_dump -h nhl-odds-database-ro -U nhl_backup -Fc nhl > "$BACKUP_FILE"
                   echo "Backup saved to $BACKUP_FILE"
                   find /backups -name "nhl-*.dump" -mtime +7 -delete
                   echo "Old backups pruned"
@@ -969,10 +989,10 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nhl-odds-app-credentials
+                  name: nhl-odds-writer-credentials
                   key: password
             - name: NHL_DATABASE_URL
-              value: "postgresql://nhl_app:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
+              value: "postgresql://nhl_writer:$(POSTGRES_PASSWORD)@nhl-odds-database-rw:5432/nhl"
           resources:
             requests:
               cpu: "50m"
