@@ -177,3 +177,34 @@ spec:
       ports:
         - port: 80
           protocol: TCP
+---
+# magic-mirror only fetches from the internet (weather, calendar, news), so it may not open
+# connections into the cluster or the LAN except to cluster DNS. Ingress stays open: its display
+# reaches it through NodePort 30808, which arrives from other nodes' flannel IPs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-internet-only
+  namespace: magic-mirror
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
