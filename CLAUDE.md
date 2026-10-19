@@ -97,6 +97,8 @@ Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains usi
 
 node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary Pi-hole + unbound on the host, outside Kubernetes. It keeps IP .2 because DHCP hands it out as the primary DNS; `dockerpi_backup` (.3) is the standalone secondary and takes over DHCP after .2 misses 3 pings in a row (one check per minute, `setup/pihole-failover-check.sh`, timestamped log `/var/log/pihole-failover.log`). Its K3s agent uses `/etc/k3s-resolv.conf` (`k3s_resolv_conf` host var) because the host resolver is 127.0.0.1, which K3s rejects.
 
+`utilities/dns-pi-hardening.yml` hardens both Pi-hole Pis: root SSH off, avahi masked, web UI HTTPS-only (4430), and an nftables table `inet dnspi` loaded by `dnspi-firewall.service` (never `nftables.service`, whose flush would wipe K3s rules on node04). Backup Pi is default-drop (DNS/NTP/UI/SSH from LAN + WireGuard 10.6.0.0/24, DHCP from anywhere for failover, 9633 from cluster); node04 is default-accept with only rpcbind 111 limited to cluster nodes/pods. Firewall changes load behind a 5-minute auto-rollback timer.
+
 ### Off-cluster DB copies
 
 `utilities/backup-node-db-pull.yml` (also imported by `setup/raspberry-pi-backup.yml`): `dockerpi_backup` pulls the day's nhl-odds dump from the first worker that has it at 4:00 into `/home/pi/backups/nhl-odds` (keeps 30; log `/var/log/nhl-backup-pull.log`). Its key is limited on workers to read-only `rrsync` of that dir.

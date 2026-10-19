@@ -1,0 +1,176 @@
+---
+# Host hardening for the two Pi-hole Pis (node04 primary, dockerpi_backup secondary).
+#
+# Firewall: our own nftables table "inet dnspi", loaded by dnspi-firewall.service.
+# Not nftables.service: its /etc/nftables.conf starts with "flush ruleset" and its
+# stop runs "nft flush ruleset", which would wipe K3s's kube-router rules on node04.
+# - dockerpi_backup: default drop; DNS/NTP/web UI/SSH from LAN + WireGuard, DHCP from
+#   anywhere (failover takes over DHCP, and DISCOVERs come from 0.0.0.0), smartctl
+#   exporter from cluster nodes.
+# - node04 (K3s worker): default accept, so K3s and its NodePorts are untouched; only
+#   rpcbind (111) is limited to cluster nodes and pods.
+# NTP stays on: Pi-hole's DHCP hands itself out as the NTP server.
+- name: Harden the Pi-hole Pis
+  hosts: node04:dockerpi_backup
+  become: true
+  gather_facts: false
+
+  vars:
+    dnspi_lan_cidr: 10.42.0.0/24
+    # Asus router WireGuard server clients.
+    dnspi_wireguard_cidr: 10.6.0.0/24
+    # Must match cluster-cidr in cluster/kubernetes/raspberry-pi-cluster.yml.
+    dnspi_pod_cidr: 10.52.0.0/16
+    dnspi_cluster_ips: "{{ groups['cluster'] | map('extract', hostvars, 'ansible_host') | list }}"
+    dnspi_default_drop: "{{ inventory_hostname in groups['backup_raspberrypi'] }}"
+    # HTTPS only; plain HTTP 8001 is off.
+    dnspi_web_ports: "4430os,[::]:4430os"
+
+  handlers:
+    - name: Reload ssh
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+
+  tasks:
+    - name: Disallow root SSH logins
+      ansible.builtin.copy:
+        # Sorts before 50-cloud-init.conf; sshd keeps the first value it reads.
+        dest: /etc/ssh/sshd_config.d/10-hardening.conf
+        content: |
+          PermitRootLogin no
+        owner: root
+        group: root
+        mode: "0644"
+        validate: /usr/sbin/sshd -t -f /etc/ssh/sshd_config
+      notify: Reload ssh
+
+    - name: Stop and mask avahi (mDNS is not used)
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+        masked: true
+      loop:
+        - avahi-daemon.socket
+        - avahi-daemon.service
+
+    - name: Read Pi-hole web server ports
+      ansible.builtin.command: pihole-FTL --config webserver.port
+      register: dnspi_current_web_ports
+      changed_when: false
+      check_mode: false
+
+    - name: Serve the Pi-hole web UI over HTTPS only
+      ansible.builtin.command: "pihole-FTL --config webserver.port '{{ dnspi_web_ports }}'"
+      when: dnspi_current_web_ports.stdout != dnspi_web_ports
+
+    - name: Restart Pi-hole to apply the web server ports
+      ansible.builtin.systemd:
+        name: pihole-FTL
+        state: restarted
+      when: dnspi_current_web_ports.stdout != dnspi_web_ports
+
+    - name: Write the dnspi nftables ruleset
+      ansible.builtin.copy:
+        dest: /etc/dnspi-firewall.nft
+        owner: root
+        group: root
+        mode: "0644"
+        validate: nft -c -f %s
+        content: |
+          # Managed by Ansible (utilities/dns-pi-hardening.yml). Replaces only this table.
+          table inet dnspi {}
+          delete table inet dnspi
+
+          table inet dnspi {
+            set cluster4 {
+              type ipv4_addr
+              flags interval
+              elements = { {{ (dnspi_cluster_ips + [dnspi_pod_cidr]) | join(', ') }} }
+            }
+
+          {% if dnspi_default_drop %}
+            set trusted4 {
+              type ipv4_addr
+              flags interval
+              elements = { {{ dnspi_lan_cidr }}, {{ dnspi_wireguard_cidr }} }
+            }
+
+            chain input {
+              type filter hook input priority filter; policy drop;
+              iif lo accept
+              ct state established,related accept
+              ct state invalid drop
+              meta l4proto { icmp, ipv6-icmp } accept
+              # DHCP failover: clients broadcast from 0.0.0.0.
+              udp dport 67 accept
+              ip saddr @trusted4 tcp dport { 22, 53, 4430 } accept
+              ip saddr @trusted4 udp dport { 53, 123 } accept
+              ip saddr @cluster4 tcp dport 9633 accept
+            }
+          {% else %}
+            chain input {
+              type filter hook input priority filter; policy accept;
+              iif lo accept
+              ip saddr @cluster4 th dport 111 accept
+              th dport 111 drop
+            }
+          {% endif %}
+          }
+      register: dnspi_ruleset
+
+    - name: Install the dnspi firewall unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/dnspi-firewall.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Pi-hole host firewall (nftables table inet dnspi)
+          Wants=network-pre.target
+          Before=network-pre.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/sbin/nft -f /etc/dnspi-firewall.nft
+          ExecReload=/usr/sbin/nft -f /etc/dnspi-firewall.nft
+          ExecStop=/usr/sbin/nft delete table inet dnspi
+
+          [Install]
+          WantedBy=multi-user.target
+      register: dnspi_unit
+
+    - name: Apply the firewall with a 5-minute automatic rollback
+      when: dnspi_ruleset.changed or dnspi_unit.changed
+      block:
+        - name: Schedule a rollback in case SSH gets cut off
+          ansible.builtin.command: >-
+            systemd-run --unit=dnspi-firewall-revert --on-active=300
+            /usr/sbin/nft delete table inet dnspi
+
+        - name: Load the ruleset
+          ansible.builtin.systemd:
+            name: dnspi-firewall
+            state: restarted
+            enabled: true
+            daemon_reload: true
+
+        - name: Reconnect over a new SSH session
+          ansible.builtin.meta: reset_connection
+
+        - name: Confirm SSH still works
+          ansible.builtin.wait_for_connection:
+            timeout: 60
+
+        - name: Cancel the rollback
+          ansible.builtin.systemd:
+            name: dnspi-firewall-revert.timer
+            state: stopped
+
+    - name: Enable the dnspi firewall at boot
+      ansible.builtin.systemd:
+        name: dnspi-firewall
+        enabled: true
