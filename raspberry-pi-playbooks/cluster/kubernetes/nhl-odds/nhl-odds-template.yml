@@ -1,3 +1,19 @@
+{#- A new pod's connections are refused for a few seconds until kube-router on every node has its IP
+    (network-policies), so short-lived pods wait for the database before their main container starts. #}
+{% macro wait_for_db(service='nhl-odds-database-rw') %}
+          initContainers:
+            - name: wait-for-db
+              image: busybox:1.37
+              command: ["sh", "-c", "for i in $(seq 60); do nc -z -w1 {{ service }} 5432 && sleep 2 && exit 0; sleep 1; done; echo '{{ service }}:5432 unreachable'; exit 1"]
+              securityContext:
+                runAsUser: 65534
+                runAsGroup: 65534
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+{%- endmacro %}
 ---
 apiVersion: v1
 kind: Secret
@@ -377,6 +393,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
@@ -423,6 +440,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
@@ -475,6 +493,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
@@ -523,6 +542,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
@@ -569,6 +589,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
@@ -616,6 +637,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: predictor
               image: "{{ image_pins['nhl-odds-predictor'] }}"
@@ -657,6 +679,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: request
               image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
@@ -701,6 +724,7 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db() }}
           containers:
             - name: rollup
               image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
@@ -747,6 +771,7 @@ spec:
           securityContext:
             seccompProfile:
               type: RuntimeDefault
+{{ wait_for_db('nhl-odds-database-ro') }}
           containers:
             - name: backup
               image: postgres:18
