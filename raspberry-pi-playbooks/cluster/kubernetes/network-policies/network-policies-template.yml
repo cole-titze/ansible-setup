@@ -1,0 +1,128 @@
+# Ingress isolation per app namespace: deny by default, then pods in the same namespace plus the few
+# outside clients each app really has. Egress stays open. K3s enforces these with kube-router, which
+# always lets a node reach its own pods, so kubelet probes need no rule.
+# Roll back everything: kubectl delete netpol -A -l homelab/netpol=isolation
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# The CronJob pods carry no labels, so the whole namespace counts as one app (the plan's "DB only
+# from nhl-odds pods"). This also covers CNPG replication and cloudflared -> frontend.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# The operator polls each instance's status port and connects to Postgres for management.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-operator
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: nhl-odds-database
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - port: 8000
+          protocol: TCP
+        - port: 5432
+          protocol: TCP
+---
+# PodMonitors: database 9187, webapi 9091, cloudflared 20241
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              prometheus: cluster-monitoring-kube-pr-prometheus
+      ports:
+        - port: 9187
+          protocol: TCP
+        - port: 9091
+          protocol: TCP
+        - port: 20241
+          protocol: TCP
+---
+# nhl-odds.kubecluster through Traefik
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector:
+    matchLabels:
+      app: nhl-odds-frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# The nightly updater's smoke test calls both Services after moving pins; failing it rolls back.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-updater-smoke-test
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [nhl-odds-frontend, nhl-odds-webapi]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cluster-maintenance
+      ports:
+        - port: 8080
+          protocol: TCP

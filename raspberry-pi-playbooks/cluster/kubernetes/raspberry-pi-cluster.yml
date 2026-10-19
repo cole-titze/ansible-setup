@@ -260,6 +260,10 @@
   import_playbook: retirement-calculator/retirement-calculator.yml
   tags: ['retirement-calculator']
 
+- name: Set up network policies (ingress isolation per app namespace).
+  import_playbook: network-policies/network-policies.yml
+  tags: ['network-policies']
+
 - name: Set up cluster maintenance (nightly image updates).
   import_playbook: cluster-maintenance/cluster-maintenance.yml
   tags: ['cluster-maintenance']

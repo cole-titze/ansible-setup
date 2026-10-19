@@ -1,0 +1,15 @@
+---
+- name: Configure network policies
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  environment:
+    K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+    PATH: "/home/{{ ansible_user }}/go/bin:{{ ansible_facts['env']['PATH'] }}"
+
+  tasks:
+    - name: Apply network policies.
+      kubernetes.core.k8s:
+        definition: "{{ lookup('template', 'network-policies-template.yml') }}"
+        state: present
