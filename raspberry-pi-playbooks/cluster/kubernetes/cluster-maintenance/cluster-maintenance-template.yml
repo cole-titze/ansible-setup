@@ -17,7 +17,7 @@ metadata:
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "daemonsets", "statefulsets"]
-    verbs: ["get", "list", "patch"]
+    verbs: ["get", "list", "watch", "patch"]
   - apiGroups: ["batch"]
     resources: ["cronjobs"]
     verbs: ["get", "list", "patch"]
@@ -75,10 +75,14 @@ data:
     # <name>.previous), then every Deployment/CronJob using that repo is set to it.
     # Pinned Deployments only roll when their digest changes. APPLY_ONLY=1 skips the
     # move and just applies the pins (utilities/scripts/image-pin.sh runs it that way).
+    # Afterwards each namespace whose pins moved must finish its rollouts and pass a smoke
+    # test, or those pins go back to <name>.previous and are held there.
     set -u
     TAG="${PROMOTE_TAG:-latest}"
     ACCEPT="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json"
     status=0
+    namespaces="default magic-mirror nhl-odds portainer retirement-calculator"
+    moved=""
 
     digest() {
       tok=$(curl -fsS "https://ghcr.io/token?scope=repository:$1:pull" | jq -r .token) || return 1
@@ -102,10 +106,11 @@ data:
       kubectl patch configmap -n cluster-maintenance image-pins --type merge \
         -p "$(jq -nc --arg k "$key" --arg v "$repo@$d" --arg p "$cur" '{data: {($k): $v, ($k + ".previous"): $p}}')" || status=1
       echo "$key: $cur -> $repo@$d"
+      moved="$moved $key"
     done
 
     pins=$(kubectl get configmap -n cluster-maintenance image-pins -o json | jq -c '.data // {}') || exit 1
-    for ns in default magic-mirror nhl-odds portainer retirement-calculator; do
+    for ns in $namespaces; do
       objs=$(kubectl get deployment,cronjob -n "$ns" -o json) || { status=1; continue; }
       # "<kind>/<name> <container>=<image>" for every pinned container that's off its pin
       printf %s "$objs" | jq -r --argjson pins "$pins" '
@@ -128,12 +133,63 @@ data:
         kubectl rollout restart deployment -n "$ns" "$d" || status=1
       done
     done
+
+    # Same checks as the CI smoke test (nhl-odds .github/scripts/smoke-test.sh), against the
+    # live Services and real data
+    get() { curl -fsS --max-time 20 "$1"; }
+    smoke() {
+      case $1 in
+        nhl-odds)
+          api=http://nhl-odds-webapi.nhl-odds:8080/api web=http://nhl-odds-frontend.nhl-odds
+          get "$api/Team/GetAllTeams?seasonStartYear=$season" | jq -e '.teams | length >= 32' >/dev/null &&
+            get "$api/GameOdds/GetAnchorDate?seasonStartYear=$season" | jq -e .anchorDate >/dev/null &&
+            get "$api/GameOdds/GetGameOddsInDateRange?startDate=$(date +%F)&endDate=$(date +%F)&seasonStartYear=$season" |
+              jq -e 'type == "array"' >/dev/null &&
+            for p in /healthz / /teams "/api/Team/GetAllTeams?seasonStartYear=$season"; do
+              get "$web$p" >/dev/null || return 1
+            done ;;
+        retirement-calculator) get http://retirement-calculator.retirement-calculator/ >/dev/null ;;
+      esac
+    }
+    # Rollouts done, then up to 6 tries 10 s apart so a pod still warming up isn't a failure
+    healthy() {
+      for d in $(kubectl get deployment -n "$1" -o name); do
+        kubectl rollout status -n "$1" "$d" --timeout=10m || return 1
+      done
+      for i in 1 2 3 4 5 6; do
+        smoke "$1" && return 0
+        sleep 10
+      done
+      return 1
+    }
+
+    [ -n "${APPLY_ONLY:-}" ] || [ -z "$moved" ] || {
+      m=$(date +%m); season=$(date +%Y); [ "${m#0}" -ge 9 ] || season=$((season - 1))
+      for ns in $namespaces; do
+        keys=$(for k in $moved; do case $k in ("$ns" | "$ns"-*) echo "$k" ;; esac; done)
+        [ -n "$keys" ] || continue
+        if healthy "$ns"; then echo "$ns: smoke test passed"; continue; fi
+        echo "$ns: smoke test FAILED, rolling back" $keys
+        status=1
+        for k in $keys; do
+          bad=$(printf %s "$pins" | jq -r --arg k "$k" '.[$k]')
+          prev=$(printf %s "$pins" | jq -r --arg k "$k.previous" '.[$k]')
+          kubectl patch configmap -n cluster-maintenance image-pins --type merge -p "$(jq -nc --arg k "$k" \
+            --arg v "$prev" --arg p "$bad" --arg h "smoke test failed $(date +%F), rolled back" \
+            '{data: {($k): $v, ($k + ".previous"): $p, ($k + ".hold"): $h}}')"
+          echo "$k: $bad -> $prev (held)"
+        done
+        APPLY_ONLY=1 sh "$0"
+        if healthy "$ns"; then echo "$ns: passes again after rollback"; else echo "$ns: still failing after rollback"; fi
+      done
+    }
     echo "Done"
     exit $status
 {% endraw %}
 ---
-# Runs nightly at 4am CT: moves image pins to the newest promoted (:prod) build and restarts
-# the unpinned deployments. StatefulSets are left alone — they hit the CNPG database
+# Runs nightly at 4am CT: moves image pins to the newest promoted (:prod) build, smoke-tests
+# the apps whose pins moved (rolling back and failing the job if one doesn't pass), and
+# restarts the unpinned deployments. StatefulSets are left alone — they hit the CNPG database
 # and force an unnecessary primary switchover.
 apiVersion: batch/v1
 kind: CronJob
