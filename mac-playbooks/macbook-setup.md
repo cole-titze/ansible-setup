@@ -74,6 +74,7 @@ Run on the Mac that stays on as the homelab control machine (one Mac only, or th
 
 Before installing, check what the jobs need:
 - **Vars files**: `ls ~/source/ansible-files/vars` shows `cluster_vars.yml`, `nhl_vars.yml`, `retirement_vars.yml` and `alerting_vars.yml`. They come down with iCloud (section 2), so nothing to restore by hand. If one is missing, iCloud hasn't finished syncing; wait.
+- **Vault password**: the vars files are ansible-vault encrypted. Copy the password from Apple Passwords (entry "Ansible vault") into the login keychain: `security add-generic-password -a "$USER" -s ansible-vault -l "Ansible vault (ansible-files/vars)" -w '<password>'`. Check with `ansible-vault view ~/source/ansible-files/vars/cluster_vars.yml | head -1` from the repo. To change a value later use `ansible-vault edit <file>`, not a text editor.
 - **Logins and keys**: `claude` logged in (Start here), `gh auth status` OK, and `~/.ssh` + `~/.kube` restored (section 2). Check `ssh -i ~/.ssh/node01 -o BatchMode=yes pi@10.42.0.20 true` and `kubectl get nodes`.
 - **Docker Desktop** set to start at login (Settings → General). The restore drill starts it if it's closed, but it must be installed.
 

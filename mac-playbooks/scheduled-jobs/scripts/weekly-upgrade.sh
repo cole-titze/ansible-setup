@@ -39,6 +39,9 @@ export KUBECONFIG
 # to a private temp dir for the run; the cluster playbooks read ANSIBLE_FILES_PATH when it's set.
 ANSIBLE_FILES_PATH="$(mktemp -d -t weekly-ansible-files)"
 export ANSIBLE_FILES_PATH
+# The vars files are ansible-vault encrypted; the copy below decrypts them into that private
+# dir (password from the login keychain). This runs outside the repo, so ansible.cfg isn't read.
+export ANSIBLE_VAULT_PASSWORD_FILE="$HOME/source/repos/ansible-setup/vault-pass.sh"
 trap 'kill $tunnel_pid 2>/dev/null; rm -f "$KUBECONFIG"; rm -rf "$ANSIBLE_FILES_PATH"' EXIT
 sed "s|server: https://10.42.0.20:6443|server: https://127.0.0.1:$KUBE_TUNNEL_PORT|" "$HOME/.kube/config" >"$KUBECONFIG"
 for _ in $(seq 1 15); do nc -z 127.0.0.1 "$KUBE_TUNNEL_PORT" 2>/dev/null && break; sleep 1; done
