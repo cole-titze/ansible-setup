@@ -493,7 +493,8 @@
                 template:
                   spec:
                     restartPolicy: OnFailure
-                    # Root without capabilities: enough to write the root-owned hostPath dir
+                    # Root with only DAC_READ_SEARCH: reads Grafana's (uid 472) database and writes
+                    # the root-owned hostPath dir
                     automountServiceAccountToken: false
                     securityContext:
                       seccompProfile:
@@ -518,6 +519,7 @@
                           readOnlyRootFilesystem: true
                           capabilities:
                             drop: ["ALL"]
+                            add: ["DAC_READ_SEARCH"]
                         args:
                           - |
                             set -e
