@@ -56,6 +56,9 @@
               enabled: true
               storageClass: longhorn
               size: 20Gi
+              # The chart default (true) deletes the PVC, and with it every log, when the
+              # StatefulSet is scaled to 0.
+              enableStatefulSetAutoDeletePVC: false
             resources:
               requests:
                 cpu: 100m
