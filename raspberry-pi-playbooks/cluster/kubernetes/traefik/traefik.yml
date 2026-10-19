@@ -10,6 +10,10 @@
 
   vars:
     tls_dir: /etc/ssl/kubecluster-tls
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
+
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
 
   tasks:
     - name: Ensure directory exists on remote for TLS files
@@ -98,3 +102,4 @@
       kubernetes.core.k8s:
         definition: "{{ lookup('template', 'traefik-ingressroute-template.yml') }}"
         state: present
+      no_log: true

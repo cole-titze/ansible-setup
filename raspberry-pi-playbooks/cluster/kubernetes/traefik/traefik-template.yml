@@ -72,8 +72,9 @@ spec:
           image: traefik:v3.7
           imagePullPolicy: Always
           args:
+            # Dashboard only through the traefik.kubecluster IngressRoute (basic auth); no
+            # --api.insecure, so :8080 serves just the metrics Prometheus scrapes.
             - "--api.dashboard=true"
-            - "--api.insecure=true"
             - "--providers.kubernetesIngress=true"
             - "--providers.kubernetesCRD=true"
             - "--providers.file.directory=/certs"
@@ -92,9 +93,9 @@ spec:
             - name: websecure
               containerPort: 443
               hostPort: 443
+            # No hostPort: only Prometheus (in-cluster) needs :8080
             - name: admin
               containerPort: 8080
-              hostPort: 8080
           volumeMounts:
             - name: certs
               mountPath: /certs
@@ -114,7 +115,9 @@ metadata:
 spec:
   selector:
     app: traefik
-  type: NodePort
+  # LAN traffic reaches Traefik through the DaemonSet hostPorts 80/443; the Service is only
+  # for in-cluster use (ServiceMonitor), so no NodePorts.
+  type: ClusterIP
   ports:
     - name: web
       port: 80

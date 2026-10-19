@@ -20,7 +20,8 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 
 ## Port Mapping
 
-- Traefik: 80 -> 30080, 443 -> 30443
+- Traefik: hostPorts 80/443 on every node (no NodePorts)
+- Longhorn / Traefik dashboards: longhorn.kubecluster, traefik.kubecluster (basic auth)
 - Codespace: 8090 -> code.kubecluster
 - Magic Mirror: 8082 -> mirror.kubecluster
 - Grafana: grafana.kubecluster

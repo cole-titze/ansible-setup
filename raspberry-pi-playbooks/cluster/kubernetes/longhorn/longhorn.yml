@@ -4,6 +4,12 @@
   become: true
   gather_facts: false
 
+  vars:
+    ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
+
+  vars_files:
+    - "{{ ansible_files_path }}/vars/cluster_vars.yml"
+
   environment:
     K8S_AUTH_KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
@@ -59,10 +65,42 @@
         fi
       changed_when: false
 
-    - name: Expose Longhorn frontend as NodePort
+    # The UI has no login of its own (and can delete volumes), so it's only reachable through
+    # longhorn.kubecluster behind basic auth. It was a NodePort (30880) until 2026-10-18; this
+    # patch turns that back into the chart's ClusterIP on clusters that still have it.
+    - name: Keep Longhorn frontend ClusterIP-only
       ansible.builtin.shell: |
-        kubectl patch svc longhorn-frontend -n longhorn-system -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":8000,"nodePort":30880}]}}'
-      changed_when: false
+        kubectl patch svc longhorn-frontend -n longhorn-system -p '{"spec":{"type":"ClusterIP"}}'
+      register: longhorn_svc_patch
+      changed_when: "'no change' not in longhorn_svc_patch.stdout"
+
+    - name: Create Longhorn UI login secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: dashboard-auth
+            namespace: longhorn-system
+          type: kubernetes.io/basic-auth
+          stringData:
+            username: "{{ dashboard_username }}"
+            password: "{{ dashboard_password }}"
+      no_log: true
+
+    - name: Create Longhorn UI basic-auth Middleware
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: traefik.io/v1alpha1
+          kind: Middleware
+          metadata:
+            name: dashboard-auth
+            namespace: longhorn-system
+          spec:
+            basicAuth:
+              secret: dashboard-auth
 
     - name: Create Longhorn IngressRoute
       kubernetes.core.k8s:
@@ -79,6 +117,8 @@
             routes:
               - match: Host(`longhorn.kubecluster`)
                 kind: Rule
+                middlewares:
+                  - name: dashboard-auth
                 services:
                   - name: longhorn-frontend
                     port: 80
