@@ -50,6 +50,10 @@
             # block-if-contains-last-replica blocks every worker drain and kured skips its reboots.
             # This lets a drain through once the evicted DB pod's volume has detached.
             nodeDrainPolicy: allow-if-replica-is-stopped
+            # The nodes have 100 Mb links. Parallel rebuilds after a reboot saturate the sending
+            # node, its replica I/O times out at the default 8s, and every rebuild restarts at 0%.
+            concurrentReplicaRebuildPerNodeLimit: 1
+            engineReplicaTimeout: '{"v1":"30","v2":"30"}'
 
     - name: Exclude control-plane node from Longhorn manager DaemonSet
       ansible.builtin.shell: |
