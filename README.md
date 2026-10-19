@@ -93,7 +93,7 @@ Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
 | Service | URL | Notes |
 |---------|-----|-------|
 | Grafana | `http://10.42.0.21:30300` | Cluster monitoring |
-| Longhorn | `https://longhorn.kubecluster` | Storage management (login: keychain item `homelab-dashboards`) |
+| Longhorn | `https://longhorn.kubecluster` | Storage management (login: Passwords app, `longhorn.kubecluster`) |
 | Esphome | `http://10.42.0.21:30605` | ESP device management |
 | Magic Mirror | `http://10.42.0.21:30808` | Smart mirror UI |
 | Traefik | `https://traefik.kubecluster/dashboard/` | Ingress dashboard (same login as Longhorn) |
