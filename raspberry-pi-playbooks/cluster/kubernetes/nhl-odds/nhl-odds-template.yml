@@ -128,14 +128,20 @@ spec:
               app: nhl-odds-webapi
           matchLabelKeys:
             - pod-template-hash
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: webapi
           image: "{{ image_pins['nhl-odds-webapi'] }}"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8080
             # Prometheus metrics (prometheus-net), kept off the Service so nginx/Cloudflare can't reach it
@@ -182,6 +188,12 @@ spec:
               memory: "128Mi"
             limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
               memory: "512Mi"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 
 ---
 apiVersion: v1
@@ -241,14 +253,20 @@ spec:
               app: nhl-odds-frontend
           matchLabelKeys:
             - pod-template-hash
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: "{{ image_pins['nhl-odds-frontend'] }}"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           # Node server: renders pages (fetching from the API directly), serves assets,
           # and proxies /api and /mcp to the API
           env:
@@ -287,6 +305,12 @@ spec:
               memory: "96Mi"
             limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
               memory: "192Mi"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 
 ---
 apiVersion: v1
@@ -348,14 +372,19 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -389,14 +418,19 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -436,14 +470,19 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -479,14 +518,19 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -520,14 +564,19 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: entry
               image: "{{ image_pins['nhl-odds-entry'] }}"
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               resources:
                 requests:
                   cpu: 50m
@@ -562,14 +611,19 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: predictor
               image: "{{ image_pins['nhl-odds-predictor'] }}"
               imagePullPolicy: IfNotPresent
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -598,8 +652,11 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: request
               image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
@@ -607,6 +664,8 @@ spec:
               command: ["/app/request-load-test.sh", "light"]
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -637,8 +696,11 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          automountServiceAccountToken: false
           securityContext:
             runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: rollup
               image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
@@ -646,6 +708,8 @@ spec:
               command: ["/app/save-uptime.sh"]
               securityContext:
                 allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: PROMETHEUS_URL
                   value: http://cluster-monitoring-kube-pr-prometheus.default:9090
@@ -678,9 +742,18 @@ spec:
           restartPolicy: OnFailure
           nodeSelector:
             kubernetes.io/hostname: {{ host }}
+          # Root without capabilities: enough to write the root-owned hostPath dir
+          automountServiceAccountToken: false
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
               image: postgres:18
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
               env:
                 - name: TZ
                   value: America/Chicago
@@ -738,13 +811,19 @@ spec:
               app: cloudflared
           matchLabelKeys:
             - pod-template-hash
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: cloudflared
           image: cloudflare/cloudflared:2026.10.1
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           args:
             - tunnel
             - --no-autoupdate
@@ -849,12 +928,16 @@ spec:
       serviceAccountName: nhl-odds-scheduler
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: scheduler
           image: "{{ image_pins['nhl-odds-scheduler-k8s'] }}"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: TZ
               value: America/Chicago
