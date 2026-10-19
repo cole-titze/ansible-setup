@@ -10,7 +10,7 @@ PART 1 — Check this morning's weekly jobs
 PART 2 — Full /k8s-major-upgrade
 Read the whole skill and follow it in order (discover, compare, upgrade, verify, update pins/docs), including its Dependabot PRs section. Keep every safety rule, since you're unattended:
 - Run its pre-check first. If the cluster is already unhealthy, or a Part 1 job is in a bad state that an upgrade could make worse, upgrade nothing in the cluster; just report.
-- One component at a time, in the skill's order and gates (Longhorn and K3s one minor at a time, CNPG operator before a K3s minor that needs it, kube-prometheus-stack CRDs first, Portainer after Longhorn). Don't force past a gate the skill says isn't met.
+- One component at a time, in the skill's order and gates (Longhorn and K3s one minor at a time, CNPG operator before a K3s minor that needs it, kube-prometheus-stack CRDs first). Don't force past a gate the skill says isn't met.
 - Run the skill's health verification after every upgrade. If one fails, stop all further cluster upgrades, apply the skill's rollback/fix guidance for that component only, and report.
 - Don't start a Longhorn or K3s upgrade that can't finish before ~00:45 CT.
 - Postgres majors only as the skill allows (CNPG image must exist).

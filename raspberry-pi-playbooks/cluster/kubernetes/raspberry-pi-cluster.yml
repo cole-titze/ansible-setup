@@ -227,10 +227,6 @@
   import_playbook: nfs/nfs.yml
   tags: ['never', 'nfs']
 
-- name: Set up portainer.
-  import_playbook: portainer/portainer.yml
-  tags: ['portainer']
-
 - name: Set up codespace.
   import_playbook: codespace/codespace.yml
   tags: ['never', 'codespace']

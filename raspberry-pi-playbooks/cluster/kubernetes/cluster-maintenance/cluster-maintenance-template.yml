@@ -81,7 +81,7 @@ data:
     TAG="${PROMOTE_TAG:-latest}"
     ACCEPT="application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json"
     status=0
-    namespaces="default magic-mirror nhl-odds portainer retirement-calculator"
+    namespaces="default magic-mirror nhl-odds retirement-calculator"
     moved=""
 
     digest() {
@@ -124,7 +124,7 @@ data:
         echo "$ns: $obj -> ${img#*=}"
         kubectl set image -n "$ns" "$obj" "$img" || status=1
       done
-      # Deployments with no pinned container (cloudflared, portainer, ...) still float on :latest
+      # Deployments with no pinned container (cloudflared, ...) still float on :latest
       [ -n "${APPLY_ONLY:-}" ] || for d in $(printf %s "$objs" | jq -r --argjson pins "$pins" '
         ([$pins | to_entries[] | select(.key | contains(".") | not) | .value | split("@")[0]]) as $repos
         | .items[] | select(.kind == "Deployment")

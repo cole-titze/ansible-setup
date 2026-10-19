@@ -8,7 +8,7 @@ K3s cluster running on Raspberry Pis (node01-04).
 # Full cluster setup
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml
 
-# Single service (available tags: helm, longhorn, traefik, portainer, codespace, magic-mirror, folding-at-home, prometheus, minecraft)
+# Single service (available tags: helm, longhorn, traefik, codespace, magic-mirror, folding-at-home, prometheus, minecraft)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kubernetes/raspberry-pi-cluster.yml -t <tag>
 
 # Reset all workloads
@@ -25,4 +25,3 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/cluster/kub
 - Magic Mirror: 8082 -> mirror.kubecluster
 - Grafana: grafana.kubecluster
 - Prometheus: prometheus.kubecluster
-- Portainer: 9443

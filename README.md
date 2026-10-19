@@ -92,7 +92,6 @@ Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| Portainer | `https://10.42.0.21:30779` | K8s management UI |
 | Grafana | `http://10.42.0.21:30300` | Cluster monitoring |
 | Longhorn | `http://10.42.0.21:30880` | Storage management |
 | Esphome | `http://10.42.0.21:30605` | ESP device management |
