@@ -124,7 +124,7 @@ data:
         echo "$ns: $obj -> ${img#*=}"
         kubectl set image -n "$ns" "$obj" "$img" || status=1
       done
-      # Deployments with no pinned container (cloudflared, ...) still float on :latest
+      # Deployments with no updater-pinned container get a daily restart (magic-mirror floats on :latest; cloudflared is version-pinned in its template)
       [ -n "${APPLY_ONLY:-}" ] || for d in $(printf %s "$objs" | jq -r --argjson pins "$pins" '
         ([$pins | to_entries[] | select(.key | contains(".") | not) | .value | split("@")[0]]) as $repos
         | .items[] | select(.kind == "Deployment")

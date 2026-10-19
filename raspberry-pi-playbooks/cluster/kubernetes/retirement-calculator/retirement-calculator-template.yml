@@ -139,7 +139,7 @@ spec:
             - pod-template-hash
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:latest
+          image: cloudflare/cloudflared:2026.10.1
           args:
             - tunnel
             - --no-autoupdate
