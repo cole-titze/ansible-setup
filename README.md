@@ -97,7 +97,7 @@ Access via any worker node IP (`10.42.0.21` or `10.42.0.22`):
 | Esphome | `http://10.42.0.21:30605` | ESP device management |
 | Magic Mirror | `http://10.42.0.21:30808` | Smart mirror UI |
 | Traefik | `https://traefik.kubecluster/dashboard/` | Ingress dashboard (same login as Longhorn) |
-| NHL Odds | `https://odds.nhlwager.com` | External (Cloudflare tunnel) |
+| NHL Odds | `https://nhl.half-built.com` | External (Cloudflare tunnel) |
 
 ```bash
 # Full cluster setup (K3s, Helm, Longhorn, all services)
