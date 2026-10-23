@@ -339,8 +339,10 @@ spec:
             requests:
               cpu: "50m"
               memory: "96Mi"
+            # Room for the page cache (up to 64 MB of rendered pages, outside the JS heap) on top
+            # of the ~180Mi a pod reaches under a Max load test
             limits:  # no CPU limit: CPU is shared by requests under contention, so bursting only uses idle CPU
-              memory: "192Mi"
+              memory: "320Mi"
           volumeMounts:
             - name: tmp
               mountPath: /tmp
