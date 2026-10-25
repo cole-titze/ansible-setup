@@ -7,6 +7,8 @@ set -u
 DEST=/home/pi/backups/nhl-odds
 KEEP=30
 KEY=/root/.ssh/nhl_backup_pull
+# node exporter's textfile collector (backup-node-exporter.yml); BackupPiDbPullStale alerts on it
+METRIC=/var/lib/prometheus/node-exporter/nhl_backup_pull.prom
 FILE="nhl-$(date +%Y-%m-%d).dump"
 
 log() { echo "$(date '+%F %T') $*"; }
@@ -20,6 +22,9 @@ for host in "$@"; do
     log "pulled $FILE from $host ($(du -h "$DEST/$FILE" | cut -f1))"
     # Names are dated, so a reverse sort puts the newest first
     ls -1 "$DEST"/nhl-????-??-??.dump | sort -r | tail -n +$((KEEP + 1)) | xargs -r rm -f
+    if [ -d "${METRIC%/*}" ]; then
+      echo "nhl_backup_pull_last_success_timestamp_seconds $(date +%s)" > "$METRIC.tmp" && mv "$METRIC.tmp" "$METRIC"
+    fi
     exit 0
   fi
   log "$host: pull failed, trying the next worker"

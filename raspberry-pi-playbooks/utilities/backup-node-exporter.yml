@@ -1,0 +1,33 @@
+---
+# node exporter on the backup Pi (:9100), scraped by the cluster's Prometheus (ScrapeConfig in
+# prometheus.yml) so its BackupPi* and PiholeFailoverActive alerts reach the phone. Two scripts
+# write to its textfile collector:
+# - nhl-backup-pull.sh: nhl_backup_pull_last_success_timestamp_seconds after each good pull
+# - pihole-failover-check.sh: pihole_failover_dhcp_active (1 while the backup has taken over DHCP)
+# The firewall (dns-pi-hardening.yml) only lets the cluster reach 9100.
+- name: Run node exporter on the backup Pi
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  tasks:
+    # Without recommends: prometheus-node-exporter-collectors adds smartmon/apt timers we don't need
+    - name: Install node exporter
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        install_recommends: false
+
+    - name: Ensure the textfile collector directory exists
+      ansible.builtin.file:
+        path: /var/lib/prometheus/node-exporter
+        state: directory
+        owner: prometheus
+        group: prometheus
+        mode: "0755"
+
+    - name: Enable node exporter
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        enabled: true
+        state: started

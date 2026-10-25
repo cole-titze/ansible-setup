@@ -7,6 +7,8 @@ TIMEOUT=2
 FAIL_THRESHOLD=3
 # /run is tmpfs, so the count starts at 0 after a reboot.
 STATE_FILE="/run/pihole-failover-fails"
+# node exporter's textfile collector (backup-node-exporter.yml); PiholeFailoverActive alerts on it
+METRIC="/var/lib/prometheus/node-exporter/pihole_failover.prom"
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') $*"
@@ -32,4 +34,9 @@ else
         log "Primary is down. Enabling DHCP on backup..."
         /usr/bin/pihole-FTL --config dhcp.active true > /dev/null
     fi
+fi
+
+if [ -d "${METRIC%/*}" ]; then
+    ACTIVE=$(/usr/bin/pihole-FTL --config dhcp.active 2>/dev/null)
+    echo "pihole_failover_dhcp_active $([ "$ACTIVE" = "true" ] && echo 1 || echo 0)" > "$METRIC.tmp" && mv "$METRIC.tmp" "$METRIC"
 fi

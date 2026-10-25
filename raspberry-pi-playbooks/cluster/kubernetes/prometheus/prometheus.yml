@@ -10,9 +10,38 @@
     # re-run with -t prometheus. UpsBatteryReplace fires 30 months later (SLA lasts 3-5 years).
     ups_battery_installed: "2026-10-18"
     ups_battery_life_months: 30
+    # Alerts that reach the phone (Alertmanager route below); add new homelab rules here
+    phone_alerts:
+      # homelab group
+      - NhlOddsSiteDown
+      - NodeDown
+      - NhlOddsDatabaseNoPrimary
+      - NhlOddsDatabaseInstanceDown
+      - LonghornVolumeFaulted
+      - LonghornVolumeDegraded
+      - UpsBatteryReplace
+      - PiholeDnsDown
+      - PiholeAllDnsDown
+      - BackupPiDown
+      - BackupPiDiskFilling
+      - BackupPiDbPullStale
+      - PiholeFailoverActive
+      # slo-rules.yml
+      - NhlOddsAvailabilityBurn
+      - NhlOddsAvailabilitySlowBurn
+      - NhlOddsApiFastBurn
+      - NhlOddsApiBurn
+      - DailyJobLate
+      - CronJobFailing
+      # smartctl exporter (nodes + backup Pi)
+      - SmartCTL.*
+      # chart defaults worth a page: disks and volumes filling up
+      - KubePersistentVolumeFillingUp
+      - KubePersistentVolumeErrors
+      - NodeFilesystemSpaceFillingUp
+      - NodeFilesystemAlmostOutOfSpace
 
-  # alerting_vars.yml: alerting_smtp_user (Gmail address), alerting_smtp_password (Gmail app
-  # password), alerting_sms_to (<10-digit number>@vtext.com, Verizon's email-to-SMS gateway)
+  # alerting_vars.yml (vaulted): alerting_discord_webhook_url (Discord channel webhook)
   vars_files:
     - ../../config.yml
     - "{{ ansible_files_path }}/vars/alerting_vars.yml"
@@ -28,20 +57,29 @@
         name: prometheus-community
         repo_url: "https://prometheus-community.github.io/helm-charts"
 
-    # Mounted by Alertmanager at /etc/alertmanager/secrets/alertmanager-smtp/, so the password
-    # stays out of the Helm values
-    - name: Create Alertmanager SMTP secret
+    # Mounted by Alertmanager at /etc/alertmanager/secrets/alertmanager-discord/, so the webhook
+    # URL stays out of the Helm values
+    - name: Create Alertmanager Discord secret
       kubernetes.core.k8s:
         state: present
         definition:
           apiVersion: v1
           kind: Secret
           metadata:
-            name: alertmanager-smtp
+            name: alertmanager-discord
             namespace: default
           stringData:
-            password: "{{ alerting_smtp_password }}"
+            webhook-url: "{{ alerting_discord_webhook_url }}"
       no_log: true
+
+    # Replaced by Discord (Gmail SMTP -> SMS never got an app password)
+    - name: Remove the old Alertmanager SMTP secret
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Secret
+        name: alertmanager-smtp
+        namespace: default
 
     - name: Deploy Prometheus + Grafana Helm chart
       kubernetes.core.helm:
@@ -54,22 +92,18 @@
         create_namespace: true
         state: present
         values:
-          # Texts warning + critical alerts to the phone through Gmail -> Verizon's email-to-SMS
-          # gateway. Info alerts and Watchdog go nowhere; they stay on prometheus.kubecluster/alerts.
+          # Sends the alerts in phone_alerts (warning + critical) to a Discord channel, which pushes to
+          # the phone. Everything else (chart defaults, info, Watchdog) stays on
+          # prometheus.kubecluster/alerts: on Pis with nightly restarts and kured reboots most chart
+          # rules flap, and KubeJobFailed fires for as long as an old failed Job object exists.
           alertmanager:
             enabled: true
             alertmanagerSpec:
               image:
                 pullPolicy: Always
               secrets:
-                - alertmanager-smtp
+                - alertmanager-discord
             config:
-              global:
-                smtp_smarthost: smtp.gmail.com:587
-                smtp_from: "{{ alerting_smtp_user }}"
-                smtp_auth_username: "{{ alerting_smtp_user }}"
-                smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-smtp/password
-                smtp_require_tls: true
               route:
                 receiver: "null"
                 group_by: [alertname, namespace]
@@ -77,9 +111,10 @@
                 group_interval: 10m
                 repeat_interval: 12h
                 routes:
-                  - receiver: sms
+                  - receiver: discord
                     matchers:
                       - severity=~"warning|critical"
+                      - alertname=~"{{ phone_alerts | join('|') }}"
               # A critical alert silences the matching warning (same as the chart's default config)
               inhibit_rules:
                 - source_matchers: [severity="critical"]
@@ -90,15 +125,12 @@
                   equal: [namespace]
               receivers:
                 - name: "null"
-                - name: sms
-                  email_configs:
-                    - to: "{{ alerting_sms_to }}"
+                - name: discord
+                  discord_configs:
+                    - webhook_url_file: /etc/alertmanager/secrets/alertmanager-discord/webhook-url
                       send_resolved: true
-                      # SMS is ~160 characters: plain text, one short line per alert
-                      headers:
-                        Subject: "{{ '{{' }} .Status | toUpper {{ '}}' }} {{ '{{' }} .CommonLabels.alertname {{ '}}' }}"
-                      html: ""
-                      text: "{{ '{{' }} range .Alerts {{ '}}' }}{{ '{{' }} .Annotations.summary {{ '}}' }}{{ '{{' }} with .Labels.nodename {{ '}}' }} ({{ '{{' }} . {{ '}}' }}){{ '{{' }} end {{ '}}' }}{{ '{{' }} with .Labels.pod {{ '}}' }} ({{ '{{' }} . {{ '}}' }}){{ '{{' }} end {{ '}}' }}\n{{ '{{' }} end {{ '}}' }}"
+                      title: "{{ '{{' }} if eq .Status \"firing\" {{ '}}' }}🔴{{ '{{' }} else {{ '}}' }}✅{{ '{{' }} end {{ '}}' }} {{ '{{' }} .CommonLabels.alertname {{ '}}' }}{{ '{{' }} if eq .Status \"resolved\" {{ '}}' }} resolved{{ '{{' }} end {{ '}}' }}"
+                      message: "{{ '{{' }} range .Alerts {{ '}}' }}{{ '{{' }} .Annotations.summary {{ '}}' }}{{ '{{' }} with .Labels.nodename {{ '}}' }} ({{ '{{' }} . {{ '}}' }}){{ '{{' }} end {{ '}}' }}{{ '{{' }} with .Labels.pod {{ '}}' }} ({{ '{{' }} . {{ '}}' }}){{ '{{' }} end {{ '}}' }}{{ '{{' }} with .Annotations.runbook_url {{ '}}' }}\n<{{ '{{' }} . {{ '}}' }}>{{ '{{' }} end {{ '}}' }}\n{{ '{{' }} end {{ '}}' }}"
 
           # K3s runs these inside the k3s server process, so their scrape targets never exist and
           # the *Down alerts would always fire; node01 uses SQLite, not etcd
@@ -260,6 +292,25 @@
         state: present
         values:
           fullnameOverride: blackbox-exporter
+          config:
+            modules:
+              # Same as the chart default (setting modules replaces it)
+              http_2xx:
+                prober: http
+                timeout: 5s
+                http:
+                  follow_redirects: true
+                  preferred_ip_protocol: ip4
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+              # Pi-hole probes (PiholeDnsDown): a real lookup through Pi-hole and unbound
+              dns_pihole:
+                prober: dns
+                timeout: 5s
+                dns:
+                  query_name: nhl.half-built.com
+                  query_type: A
+                  preferred_ip_protocol: ip4
+                  valid_rcodes: [NOERROR]
 
     # SMART data (wear, spare, temperature, media errors) from every node's NVMe drive. Its alerts text
     # the phone (warning/critical) and show on the Homelab Nodes dashboard's Disks row.
@@ -355,6 +406,50 @@
               - targetLabel: job
                 replacement: smartctl-exporter
 
+    # Not in the cluster; node exporter installed by utilities/backup-node-exporter.yml
+    - name: Scrape the backup Pi's node exporter
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1alpha1
+          kind: ScrapeConfig
+          metadata:
+            name: node-backup-pi
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec:
+            staticConfigs:
+              - targets: ["{{ hostvars['dockerpi_backup'].ansible_host }}:9100"]
+                labels:
+                  nodename: dockerpibackup
+            relabelings:
+              - targetLabel: job
+                replacement: backup-pi-node
+
+    # Both Pi-holes: primary on node04's host (.2), secondary on the backup Pi (.3)
+    - name: Probe the Pi-hole DNS servers
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1
+          kind: Probe
+          metadata:
+            name: pihole-dns
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec:
+            interval: 60s
+            module: dns_pihole
+            prober:
+              url: blackbox-exporter.default.svc:9115
+            targets:
+              staticConfig:
+                static:
+                  - "{{ hostvars['node04'].ansible_host }}:53"
+                  - "{{ hostvars['dockerpi_backup'].ansible_host }}:53"
+
     - name: Probe the public nhl-odds site
       kubernetes.core.k8s:
         state: present
@@ -412,7 +507,9 @@
                       summary: "{{ '{{' }} $labels.node {{ '}}' }} not Ready 10+ min"
                       runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#nodedown
                   - alert: NhlOddsDatabaseNoPrimary
-                    expr: absent(cnpg_pg_replication_in_recovery{cluster="nhl-odds-database"} == 0)
+                    # This metric has no cluster label (only cnpg_collector_up does); selecting on
+                    # cluster matched nothing, so absent() always fired
+                    expr: absent(cnpg_pg_replication_in_recovery{job="nhl-odds/nhl-odds-database"} == 0)
                     for: 5m
                     labels:
                       severity: critical
@@ -454,6 +551,50 @@
                     annotations:
                       summary: "UPS battery installed {{ ups_battery_installed }}: replace it"
                       runbook_url: https://github.com/cole-titze/nhl-odds/wiki/Runbooks#upsbatteryreplace
+                  # DNS: blackbox lookups through each Pi-hole (Probe pihole-dns)
+                  - alert: PiholeDnsDown
+                    expr: probe_success{job="probe/default/pihole-dns"} == 0
+                    for: 5m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: "Pi-hole {{ '{{' }} $labels.instance {{ '}}' }} not answering DNS 5+ min"
+                  - alert: PiholeAllDnsDown
+                    expr: sum(probe_success{job="probe/default/pihole-dns"}) == 0
+                    for: 3m
+                    labels:
+                      severity: critical
+                    annotations:
+                      summary: Both Pi-holes down, LAN has no DNS
+                  # Backup Pi (node exporter + textfile metrics, utilities/backup-node-exporter.yml)
+                  - alert: BackupPiDown
+                    expr: up{job="backup-pi-node"} == 0
+                    for: 10m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: Backup Pi unreachable 10+ min (secondary DNS, DHCP failover, DB copies)
+                  - alert: BackupPiDiskFilling
+                    expr: node_filesystem_avail_bytes{job="backup-pi-node",mountpoint="/"} / node_filesystem_size_bytes{job="backup-pi-node",mountpoint="/"} < 0.10
+                    for: 30m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: Backup Pi disk under 10% free
+                  # The pull runs at 4:00 daily
+                  - alert: BackupPiDbPullStale
+                    expr: time() - nhl_backup_pull_last_success_timestamp_seconds > 26 * 3600
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: Backup Pi has no new nhl-odds dump in 26+ h (see /var/log/nhl-backup-pull.log)
+                  - alert: PiholeFailoverActive
+                    expr: pihole_failover_dhcp_active == 1
+                    for: 5m
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: Backup Pi took over DHCP, primary Pi-hole (node04) not answering pings
 
     # SLOs (site availability, API errors+latency) and job-freshness alerts. Plain YAML, not a
     # template, so promtool can test the same file: see the command at the top of slo-rules.yml.

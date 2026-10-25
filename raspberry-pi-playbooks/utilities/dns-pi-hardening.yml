@@ -111,7 +111,7 @@
               udp dport 67 accept
               ip saddr @trusted4 tcp dport { 22, 53, 4430 } accept
               ip saddr @trusted4 udp dport { 53, 123 } accept
-              ip saddr @cluster4 tcp dport 9633 accept
+              ip saddr @cluster4 tcp dport { 9100, 9633 } accept
             }
           {% else %}
             chain input {
