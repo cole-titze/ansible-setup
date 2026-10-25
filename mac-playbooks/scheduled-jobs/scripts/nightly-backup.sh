@@ -3,17 +3,11 @@
 # Runs after the cluster's own backups: nhl-odds dump 1:00, Grafana 1:30, kured reboots 2:00-2:55.
 set -uo pipefail
 
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES   # Python fork crashes on macOS, see macbook-setup.md
+# shellcheck source=common.sh
+. "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 REPO="$HOME/source/repos/ansible-setup"
-LOG_DIR="$HOME/Library/Logs/homelab"
 LOG="$LOG_DIR/nightly-backup-$(date +%Y-%m-%d).log"
-mkdir -p "$LOG_DIR"
-
-notify() {
-  osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
-}
 
 {
   echo "== Nightly backup $(date '+%Y-%m-%d %H:%M:%S')"
@@ -25,6 +19,7 @@ status=$?
 
 if [ $status -ne 0 ]; then
   notify "Nightly backup FAILED" "Exit $status. See $LOG"
+  discord_post "❌ Nightly Mac backup FAILED (exit $status)" "$(tail -15 "$LOG")" "$LOG"
 else
   echo "== Done $(date '+%H:%M:%S')" >>"$LOG"
 fi

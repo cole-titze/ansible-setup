@@ -10,6 +10,10 @@
     <string>/bin/bash</string>
     <string>{{ scripts_dir }}/{{ item.script }}</string>
   </array>
+{% if item.interval is defined %}
+  <key>StartInterval</key>
+  <integer>{{ item.interval }}</integer>
+{% else %}
   <key>StartCalendarInterval</key>
   <dict>
 {% if item.weekday is defined %}
@@ -21,6 +25,7 @@
     <key>Minute</key>
     <integer>{{ item.minute }}</integer>
   </dict>
+{% endif %}
   <key>WorkingDirectory</key>
   <string>{{ home }}/source/repos</string>
   <key>StandardOutPath</key>

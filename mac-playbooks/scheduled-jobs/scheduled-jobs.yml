@@ -45,8 +45,27 @@
         minute: 0
         # Background throttles the job's network I/O; its long API streams stalled mid-run
         process_type: Standard
+      # Every minute: new alerts sent to Discord get a headless Claude session (alert-agent.sh)
+      - name: alert-agent
+        label: com.coletitze.alert-agent
+        script: alert-agent.sh
+        interval: 60
+        process_type: Standard
+
+  # alerting_vars.yml: alerting_discord_webhook_url, the channel the jobs report to
+  vars_files:
+    - "{{ lookup('env', 'ANSIBLE_FILES_PATH') or home + '/source/ansible-files' }}/vars/alerting_vars.yml"
 
   tasks:
+    # launchd's bash can't read the vaulted file in iCloud; the jobs read the keychain copy
+    # (common.sh discord_post)
+    - name: Copy the Discord webhook to the login keychain
+      ansible.builtin.command:
+        argv: [security, add-generic-password, -U, -s, homelab-discord-webhook, -a, homelab,
+               -w, "{{ alerting_discord_webhook_url }}"]
+      changed_when: false
+      no_log: true
+
     - name: Ensure log and LaunchAgents directories exist
       ansible.builtin.file:
         path: "{{ item }}"

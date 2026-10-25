@@ -4,19 +4,11 @@
 # launchd's bash can't read iCloud Drive, Ansible's Python can. Notifies either way.
 set -uo pipefail
 
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES   # Python fork crashes on macOS, see macbook-setup.md
-# Runs outside the repo, so ansible.cfg (and its vault_password_file) isn't read
-export ANSIBLE_VAULT_PASSWORD_FILE="$HOME/source/repos/ansible-setup/vault-pass.sh"
+# shellcheck source=common.sh
+. "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 REPO="$HOME/source/repos/ansible-setup"
-LOG_DIR="$HOME/Library/Logs/homelab"
 LOG="$LOG_DIR/restore-drill-$(date +%Y-%m-%d).log"
-mkdir -p "$LOG_DIR"
-
-notify() {
-  osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
-}
 
 ansible-playbook "$REPO/mac-playbooks/backup/restore-drill.yml" >"$LOG" 2>&1
 status=$?
@@ -24,8 +16,11 @@ status=$?
 if [ $status -ne 0 ]; then
   msg=$(grep -o 'DRILL FAILED: [^"]*' "$LOG" | tail -1)
   notify "Restore drill FAILED" "${msg:-Exit $status. See $LOG}"
+  discord_post "❌ Restore drill FAILED" "${msg:-Exit $status.} Log: $LOG" "$LOG"
 else
   notify "Restore drill passed" "nhl-odds, Grafana and MacBook backups check out. See $LOG"
+  # The playbook's per-backup result lines ("nhl-odds: ...", "grafana: ...", "macbook: ...", "vault: ...")
+  discord_post "✅ Restore drill passed" "$(grep -oE '"msg": "(nhl-odds|grafana|macbook|vault): [^"]*' "$LOG" | sed 's/"msg": "//')"
 fi
 
 find "$LOG_DIR" -name 'restore-drill-*.log' -mtime +90 -delete
