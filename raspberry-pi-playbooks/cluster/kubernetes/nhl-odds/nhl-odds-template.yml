@@ -378,6 +378,20 @@ spec:
       app: nhl-odds-frontend
 
 ---
+# The frontend and web API rate-limit per CF-Connecting-IP. Cloudflare sets it on public traffic,
+# but on this LAN route the client could send its own and rotate it to dodge the limit, so drop it
+# here; the frontend then falls back to Traefik's X-Real-Ip.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-cf-connecting-ip
+  namespace: nhl-odds
+spec:
+  headers:
+    customRequestHeaders:
+      CF-Connecting-IP: ""
+
+---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -389,6 +403,8 @@ spec:
   routes:
     - match: Host(`nhl-odds.kubecluster`)
       kind: Rule
+      middlewares:
+        - name: strip-cf-connecting-ip
       services:
         - name: nhl-odds-frontend
           port: 80
