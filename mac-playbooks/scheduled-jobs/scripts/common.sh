@@ -42,25 +42,31 @@ print(json.dumps({"content": f"**{os.environ['"'"'TITLE'"'"']}**\n{body}"[:2000]
   esac
 }
 
-# start_cluster_env: sets up what an unattended Claude session needs to run kubectl and the
-# playbooks; cleans up on exit. Call once, after LOG is set.
-# - macOS Local Network privacy: under launchd only Apple's binaries (ssh, curl) may reach
-#   10.42.0.x; kubectl gets "no route to host". Tunnel the K3s API through localhost with ssh and
-#   point a copy of the kubeconfig at it (K3s's API cert covers 127.0.0.1).
-# - The playbooks' vars live in iCloud (~/source/ansible-files), which macOS TCC blocks for
-#   Claude's Bash under launchd. Ansible's own Python can read it, so copy vars/ (decrypted, password
-#   from the login keychain) to a private temp dir; the cluster playbooks read ANSIBLE_FILES_PATH.
-start_cluster_env() {
+# start_kube_tunnel <port>: macOS Local Network privacy lets only Apple's binaries (ssh, curl)
+# reach 10.42.0.x under launchd, so kubectl gets "no route to host". Tunnels the K3s API through
+# localhost with ssh and points KUBECONFIG at a copy of the kubeconfig that uses it (K3s's API cert
+# covers 127.0.0.1). Cleans up on exit. Call after LOG is set.
+start_kube_tunnel() {
   local port=$1
   ssh -i "$HOME/.ssh/node01" -o BatchMode=yes -o ExitOnForwardFailure=yes -N \
     -L "$port:127.0.0.1:6443" pi@10.42.0.20 >>"$LOG" 2>&1 &
   CLUSTER_TUNNEL_PID=$!
   KUBECONFIG="$(mktemp -t homelab-kubeconfig)"
-  ANSIBLE_FILES_PATH="$(mktemp -d -t homelab-ansible-files)"
-  export KUBECONFIG ANSIBLE_FILES_PATH
-  trap 'kill $CLUSTER_TUNNEL_PID 2>/dev/null; rm -f "$KUBECONFIG"; rm -rf "$ANSIBLE_FILES_PATH"' EXIT
+  export KUBECONFIG
+  trap 'kill $CLUSTER_TUNNEL_PID 2>/dev/null; rm -f "$KUBECONFIG"' EXIT
   sed "s|server: https://10.42.0.20:6443|server: https://127.0.0.1:$port|" "$HOME/.kube/config" >"$KUBECONFIG"
   for _ in $(seq 1 15); do nc -z 127.0.0.1 "$port" 2>/dev/null && break; sleep 1; done
+}
+
+# start_cluster_env <port>: the kube tunnel, plus the playbooks' vars for sessions that run them.
+# The vars live in iCloud (~/source/ansible-files), which macOS TCC blocks for Claude's Bash under
+# launchd. Ansible's own Python can read it, so copy vars/ (decrypted, password from the login
+# keychain) to a private temp dir; the cluster playbooks read ANSIBLE_FILES_PATH.
+start_cluster_env() {
+  start_kube_tunnel "$1"
+  ANSIBLE_FILES_PATH="$(mktemp -d -t homelab-ansible-files)"
+  export ANSIBLE_FILES_PATH
+  trap 'kill $CLUSTER_TUNNEL_PID 2>/dev/null; rm -f "$KUBECONFIG"; rm -rf "$ANSIBLE_FILES_PATH"' EXIT
   # Time-limited: a pending macOS privacy prompt for iCloud Drive blocks the read forever
   if ! perl -e 'alarm shift; exec @ARGV' 180 ansible localhost -m ansible.builtin.copy \
     -a "src=$HOME/source/ansible-files/vars dest=$ANSIBLE_FILES_PATH/ mode=0600 directory_mode=0700" >>"$LOG" 2>&1; then

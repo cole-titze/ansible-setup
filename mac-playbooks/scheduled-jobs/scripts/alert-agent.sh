@@ -2,7 +2,10 @@
 # Alert responder, started by launchd (com.coletitze.alert-agent) every minute. Asks Alertmanager
 # (through node01, since only ssh/curl reach the LAN under launchd) for the alerts it's sending to
 # Discord, and for new ones runs Claude Code headless with alert-agent-prompt.md to investigate and
-# fix them, then posts its report to the same Discord channel.
+# apply safe fixes, then posts its report to the same Discord channel and adds next steps to my
+# follow-ups list. The session runs in dontAsk mode with ALLOWED_TOOLS: anything not listed is
+# refused (no prompt to answer), so the limits don't depend on the prompt. Nodes only through
+# homelab-node.sh, which has its own command allowlist.
 # - One session per poll for all new alerts (one incident often fires several).
 # - An alert counts once (fingerprint + start time), so the 12h Discord repeats don't re-run it;
 #   the same alertname waits COOLDOWN after a run; at most DAILY_CAP sessions a day.
@@ -105,10 +108,33 @@ esac
 names=$(echo "$decision" | sed -n 's/^- \([^ ]*\) .*/\1/p' | sort -u | paste -sd, - | sed 's/,/, /g')
 LOG="$LOG_DIR/alert-agent-$(date +%Y-%m-%d-%H%M).log"
 REPORT="${LOG%.log}-report.md"
+NEXT="${LOG%.log}-next.md"
 poll_log "session for: $names (log $LOG)"
 
-cd "$HOME/source/repos" || exit 1
-start_cluster_env 16444
+FOLLOWUPS="$HOME/.claude/projects/-Users-coletitze-source-repos/memory/nhl-roster-repair-followups.md"
+# Read-only kubectl, three safe fixes (restart a deployment, delete a stuck pod, re-run a CronJob),
+# the node wrapper and text tools. It can only write its report and next-steps files; Claude Code
+# won't let it edit ~/.claude, so this script adds the next steps to the follow-ups list.
+ALLOWED_TOOLS=(
+  "Read(~/**)" "Grep(~/**)" "Glob(~/**)"
+  "Edit(~/Library/Logs/homelab/alert-agent-*-report.md)" "Edit(~/Library/Logs/homelab/alert-agent-*-next.md)"
+  "Bash(kubectl get:*)" "Bash(kubectl describe:*)" "Bash(kubectl logs:*)" "Bash(kubectl top:*)"
+  "Bash(kubectl events:*)" "Bash(kubectl rollout status:*)" "Bash(kubectl rollout history:*)"
+  "Bash(kubectl rollout restart:*)" "Bash(kubectl delete pod:*)"
+  "Bash(kubectl create job:*)"
+  "Bash($SCRIPT_DIR/homelab-node.sh:*)"
+  "Bash(gh run list:*)" "Bash(gh run view:*)"
+  "Bash(dig:*)" "Bash(ping -c:*)" "Bash(curl -s -o /dev/null -w:*)"
+  "Bash(grep:*)" "Bash(jq:*)" "Bash(head:*)" "Bash(tail:*)" "Bash(sort:*)" "Bash(uniq:*)"
+  "Bash(wc:*)" "Bash(cut:*)" "Bash(date:*)"
+)
+
+# An empty working directory: Claude allows edits anywhere under its working directories, so
+# running from ~/source/repos (or --add-dir) would let it edit the repos
+WORK_DIR="$STATE_DIR/work"
+mkdir -p "$WORK_DIR"
+cd "$WORK_DIR" || exit 1
+start_kube_tunnel 16444
 
 # Subshell, so its exit status (and not an exit of this script) comes out
 (
@@ -118,10 +144,11 @@ start_cluster_env 16444
 Alerts:
 $decision
 
+Node wrapper: $SCRIPT_DIR/homelab-node.sh
+Next-steps file: $NEXT
 Write the final report to $REPORT as well as printing it." \
-    --permission-mode bypassPermissions \
-    --add-dir "$HOME/.claude/skills" \
-    --add-dir "$ANSIBLE_FILES_PATH" \
+    --permission-mode dontAsk \
+    --allowedTools "${ALLOWED_TOOLS[@]}" \
     --output-format stream-json --verbose &
   claude_pid=$!
   ( sleep "$SESSION_TIMEOUT"; kill "$claude_pid" 2>/dev/null ) &
@@ -132,6 +159,33 @@ Write the final report to $REPORT as well as printing it." \
   exit $status
 ) >>"$LOG" 2>&1
 status=$?
+
+# Next steps go into the follow-ups list: "NOW: ..." under Can do now, "LATER: ..." under Later
+if [ -s "$NEXT" ] && [ -f "$FOLLOWUPS" ]; then
+  NEXT="$NEXT" FOLLOWUPS="$FOLLOWUPS" REPORT_NAME="${REPORT##*/}" python3 - <<'EOF' >>"$POLL_LOG" 2>&1
+import os, re
+lines = [l.strip() for l in open(os.environ["NEXT"]) if l.strip()]
+path = os.environ["FOLLOWUPS"]
+text = open(path).read()
+added = 0
+for l in lines[:3]:
+    m = re.match(r"(NOW|LATER):\s*(.+)", l)
+    if not m:
+        continue
+    bullet = f"- {m.group(2)[:400]} (agent report: {os.environ['REPORT_NAME']})\n"
+    if m.group(1) == "NOW":
+        if "**Can do now:**\n- (none)\n" in text:
+            text = text.replace("**Can do now:**\n- (none)\n", "**Can do now:**\n" + bullet, 1)
+        else:
+            text = text.replace("**Can do now:**\n", "**Can do now:**\n" + bullet, 1)
+    else:
+        text = text.replace("**Later / discuss:**\n", "**Later / discuss:**\n" + bullet, 1)
+    added += 1
+if added:
+    open(path, "w").write(text)
+print(f"added {added} follow-up(s) from {os.environ['NEXT']}")
+EOF
+fi
 
 if [ -s "$REPORT" ]; then
   discord_post "🤖 Alert agent: $names" "$(cat "$REPORT")"
