@@ -21,7 +21,7 @@
       kubernetes.core.helm:
         name: loki
         chart_ref: grafana/loki
-        chart_version: "7.3.0"
+        chart_version: "7.5.0"
         release_namespace: logging
         create_namespace: true
         update_repo_cache: true
@@ -29,6 +29,9 @@
         values:
           deploymentMode: SingleBinary
           loki:
+            # The chart's default tag lags the Loki patch releases (chart 7.5.0 still ships 3.6.11)
+            image:
+              tag: 3.6.19
             # One tenant; nothing outside the cluster can reach it
             auth_enabled: false
             commonConfig:
