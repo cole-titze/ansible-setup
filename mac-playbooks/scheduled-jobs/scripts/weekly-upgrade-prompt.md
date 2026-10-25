@@ -25,9 +25,16 @@ Read ~/.claude/skills/nhl-odds-security/SKILL.md and run Steps 1–7 against thi
 - retirement-calculator and containers have their own security-scan.yml (retirement-calculator's :prod image and magic-mirror:latest, also Sunday 10:00 UTC). Read their latest finished runs (`gh run view <id> --log-failed`) and triage them the same way: bump dependencies or base images where a fix exists, and keep their trivy-action SHA and TRIVY_VERSION in step with nhl-odds'.
 Do these on a local branch and run the repo's checks from k8s-major-upgrade's Dependabot section (nhl-odds: `dotnet build`, `dotnet test`, `cd frontend && npm ci && npm run build && npm run a11y`; retirement-calculator: its lint/test/build checks; plus a Docker build of any image whose Dockerfile changed). If everything passes, push to main. If checks fail and the fix isn't obvious, don't push; leave the branch and report.
 
+PART 4 — /update-mac (last, after Parts 1–3 are finished)
+Read ~/.claude/skills/update-mac/SKILL.md and run its check, then apply only its "Safe to apply now" group without asking, keeping every rule and verify/rollback step:
+- Apply: Homebrew formulae, Homebrew casks for apps that aren't running (skip a cask if its app is running; don't quit apps), VS Code extensions, npm globals, Python patch/minor releases, Ansible and its collections (with the syntax-check + backup dry-run verify and rollback), the nhl-odds venv (move it to the Dockerfile's Python minor if Part 3 or a Dependabot merge changed it; import check, restore the old venv on failure), gh extensions.
+- Skip and list for me: macOS updates, App Store, the .NET SDK, anything needing sudo or a password, running GUI apps, new Node/.NET majors, and Ollama model pulls.
+- Run `claude update` as the very last command of the whole run.
+
 Always: never force-push, never delete volumes/PVCs, never close PRs without reason. Commit and push version pins and skill updates the way the skills say (ansible-setup to main; update "Last full run"/current-state notes in claude-skills, keeping ~/.claude/skills in sync per that repo's CLAUDE.md). Leave every repo on its default branch with a clean working tree when you finish, except branches you left on purpose and reported.
 
 Finish with one summary:
 1. Weekly jobs: each workflow/job, result, and what you did about failures.
 2. Upgrades table: component, old → new (or current/skipped/blocked), health PASS/FAIL, one-line note; Dependabot PRs merged or left open and why.
 3. Security: CVEs fixed (and how), CVEs not actionable, Trivy pins, warnings fixed, warnings left, and code findings (report-only), most severe first.
+4. Mac: what was updated (old → new), what failed or was rolled back, and what's left for me.
