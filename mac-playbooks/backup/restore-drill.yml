@@ -180,13 +180,13 @@
           ansible.builtin.find:
             paths: "{{ home }}/source/ansible-files/vars"
             patterns: "*.yml"
-          register: vars_files
+          register: vault_vars_files
 
         - name: Check the vault password opens each vars file
           ansible.builtin.include_vars:
             file: "{{ item.path }}"
             name: vault_check
-          loop: "{{ vars_files.files }}"
+          loop: "{{ vault_vars_files.files }}"
           register: vault_check
           ignore_errors: true
           no_log: true
@@ -197,12 +197,12 @@
               | map(attribute='item.path') | map('basename') | list }}"
           ansible.builtin.set_fact:
             vault_failed: "{{ undecryptable }}"
-            failures: "{{ failures + (['vault: no vars files found'] if vars_files.matched == 0 else [])
+            failures: "{{ failures + (['vault: no vars files found'] if vault_vars_files.matched == 0 else [])
               + (undecryptable | map('regex_replace', '^', 'vault: can not decrypt ') | list) }}"
 
         - name: Show the vault result
           ansible.builtin.debug:
-            msg: "vault: {{ vars_files.matched - vault_failed | length }}/{{ vars_files.matched }} vars files decrypt"
+            msg: "vault: {{ vault_vars_files.matched - vault_failed | length }}/{{ vault_vars_files.matched }} vars files decrypt"
 
       always:
         - name: Remove the throwaway Postgres
