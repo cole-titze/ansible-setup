@@ -85,6 +85,10 @@
             enabled: false
           test:
             enabled: false
+          # Loads alert-rule ConfigMaps for the Loki ruler; there are none, so it would only be an idle image
+          sidecar:
+            rules:
+              enabled: false
 
     - name: Deploy Alloy
       kubernetes.core.helm:
