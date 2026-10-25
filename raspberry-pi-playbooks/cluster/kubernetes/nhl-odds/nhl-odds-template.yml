@@ -3,7 +3,7 @@
 {% macro wait_for_db(service='nhl-odds-database-rw') %}
           initContainers:
             - name: wait-for-db
-              image: busybox:1.37
+              image: busybox:1.38
               command: ["sh", "-c", "for i in $(seq 60); do nc -z -w1 {{ service }} 5432 && sleep 2 && exit 0; sleep 1; done; echo '{{ service }}:5432 unreachable'; exit 1"]
               securityContext:
                 runAsUser: 65534
@@ -865,7 +865,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:2026.10.1
+          image: cloudflare/cloudflared:2026.10.3
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
