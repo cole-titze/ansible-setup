@@ -90,7 +90,7 @@
       kubernetes.core.helm:
         name: alloy
         chart_ref: grafana/alloy
-        chart_version: "1.13.0"
+        chart_version: "1.14.3"
         release_namespace: logging
         wait: true
         values:
