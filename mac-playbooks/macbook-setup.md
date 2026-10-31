@@ -114,6 +114,12 @@ Install only if wanted: ChatGPT, Firefox, Discord, Minecraft.
 3. Pick the largest one whose download size is at most ~60% of RAM, leaving room for the context window, the OS and an IDE. Mention one size smaller as a faster fallback.
 4. Tell the user the pick and its size, and pull it (`ollama pull <model>`) only after they agree.
 
+**Ollama for the nhl-odds site's chat assistant** (the cluster's webapi calls `http://10.42.0.60:11434`, set in `nhl-odds-template.yml`):
+1. `ollama pull qwen3.5:9b` (the webapi's default model; it asks for a 32k context itself).
+2. In the Ollama app's Settings, turn on **Expose Ollama to the network** (it listens on `*:11434` instead of localhost).
+3. Check Pi-hole's DHCP still reserves `10.42.0.60` for this Mac's Wi-Fi address (`sudo pihole-FTL --config dhcp.hosts` on node04). A new Mac has a new address, so update the reservation.
+4. From a node: `curl -s http://10.42.0.60:11434/api/version` answers. If the Mac is asleep or Ollama is closed, the site's assistant just says it couldn't answer.
+
 ## Reminders for the user
 - **Work apps**: install and set up Windows App and Cisco yourself.
 
