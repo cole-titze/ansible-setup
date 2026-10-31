@@ -797,8 +797,14 @@ metadata:
 spec:
   schedule: "{{ (45 + loop.index0 * 20) % 60 }} {{ (45 + loop.index0 * 20) // 60 }} * * *"
   timeZone: "America/Chicago"
+  # While node02 hung (10-27), each night's Job sat Pending; on reboot all three ran at once into
+  # the same dated file. Forbid skips a night while one is still active, a Job gives up after 4h
+  # (a dump takes ~10 min), and a missed schedule more than 1h late is skipped.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 14400
       template:
         spec:
           restartPolicy: OnFailure
@@ -831,9 +837,13 @@ spec:
                   set -e
                   mkdir -p /backups
                   BACKUP_FILE="/backups/nhl-$(date +%Y-%m-%d).dump"
-                  pg_dump -h nhl-odds-database-ro -U nhl_backup -Fc nhl > "$BACKUP_FILE"
+                  # Dump to a temp file, so a failed or overlapping run never leaves a bad .dump
+                  # for the off-node pulls
+                  pg_dump -h nhl-odds-database-ro -U nhl_backup -Fc nhl > "$BACKUP_FILE.tmp"
+                  mv "$BACKUP_FILE.tmp" "$BACKUP_FILE"
                   echo "Backup saved to $BACKUP_FILE"
                   find /backups -name "nhl-*.dump" -mtime +7 -delete
+                  find /backups -name "nhl-*.dump.tmp" -mmin +240 -delete
                   echo "Old backups pruned"
               volumeMounts:
                 - name: backup-storage
