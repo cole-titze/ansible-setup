@@ -106,9 +106,6 @@
               extra:
                 - name: alloy-data
                   mountPath: /var/lib/alloy
-                - name: journal
-                  mountPath: /run/log/journal
-                  readOnly: true
             extraEnv:
               - name: NODE_NAME
                 valueFrom:
@@ -179,7 +176,7 @@
                   forward_to = [loki.write.default.receiver]
                 }
 
-                // Node services (k3s, kured's reboots, apt, sshd, ...); the journal lives in RAM
+                // Node services (k3s, kured's reboots, apt, sshd, ...); on disk since 10-30 (raspberry-pi-setup.yml)
                 loki.relabel "journal" {
                   forward_to = []
                   rule {
@@ -193,7 +190,7 @@
                 }
 
                 loki.source.journal "node" {
-                  path          = "/run/log/journal"
+                  path          = "/var/log/journal"
                   max_age       = "12h"
                   relabel_rules = loki.relabel.journal.rules
                   labels        = {job = "journal", node = sys.env("NODE_NAME")}
@@ -216,11 +213,6 @@
                   hostPath:
                     path: /var/lib/alloy
                     type: DirectoryOrCreate
-                # The Pis' journal is volatile (in RAM, gone on reboot); Loki is now its only history
-                - name: journal
-                  hostPath:
-                    path: /run/log/journal
-                    type: Directory
 
     # The Grafana sidecar loads any ConfigMap labeled grafana_datasource=1
     - name: Add Loki to Grafana

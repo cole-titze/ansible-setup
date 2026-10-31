@@ -28,11 +28,38 @@ mkdir -p "$STATE_DIR"
 
 poll_log() { echo "$(date '+%F %T') $*" >>"$POLL_LOG"; }
 
-alerts=$(ssh -i "$HOME/.ssh/node01" -o BatchMode=yes -o ConnectTimeout=10 pi@10.42.0.20 \
-  "sudo k3s kubectl get --raw '/api/v1/namespaces/default/services/alertmanager-operated:9093/proxy/api/v2/alerts?active=true&silenced=false&inhibited=false&receiver=discord'" 2>>"$POLL_LOG") || {
-  poll_log "couldn't reach Alertmanager"
+# Alerting itself is down (Alertmanager unreachable, or Prometheus's always-firing Watchdog
+# missing): nothing would reach Discord, so say so after DOWN_AFTER, once, and again when it's back.
+# node02 hung for 3 days (10-27) with Alertmanager on it and nothing was posted.
+DOWN_AFTER=$((10 * 60))
+DOWN_SINCE="$STATE_DIR/alerting-down-since"
+DOWN_NOTED="$STATE_DIR/alerting-down-noted"
+alerting_down() {
+  poll_log "$1"
+  [ -f "$DOWN_SINCE" ] || date +%s >"$DOWN_SINCE"
+  if [ ! -f "$DOWN_NOTED" ] && [ $(($(date +%s) - $(cat "$DOWN_SINCE"))) -ge $DOWN_AFTER ]; then
+    discord_post "🔴 Alerting is down" "$1 since $(date -r "$(cat "$DOWN_SINCE")" '+%a %H:%M'), so cluster alerts aren't reaching Discord. Check node01 and the default namespace's alertmanager/prometheus pods." &&
+      touch "$DOWN_NOTED"
+  fi
   exit 0
 }
+alerting_up() {
+  if [ -f "$DOWN_NOTED" ]; then
+    discord_post "✅ Alerting is back" "Alertmanager and Prometheus answer again (down since $(date -r "$(cat "$DOWN_SINCE")" '+%a %H:%M'))."
+  fi
+  rm -f "$DOWN_SINCE" "$DOWN_NOTED"
+}
+
+alerts=$(ssh -i "$HOME/.ssh/node01" -o BatchMode=yes -o ConnectTimeout=10 pi@10.42.0.20 \
+  "sudo k3s kubectl get --raw '/api/v1/namespaces/default/services/alertmanager-operated:9093/proxy/api/v2/alerts?active=true&silenced=false&inhibited=false'" 2>>"$POLL_LOG") ||
+  alerting_down "Alertmanager can't be reached"
+# Watchdog always fires (routed to "null"); without it Prometheus isn't evaluating or sending
+watchdog=$(ALERTS="$alerts" python3 -c '
+import json, os
+alerts = json.loads(os.environ["ALERTS"])
+print(sum(a["labels"].get("alertname") == "Watchdog" for a in alerts))' 2>>"$POLL_LOG") || watchdog=0
+[ "$watchdog" -gt 0 ] || alerting_down "Prometheus's Watchdog alert is missing (Prometheus down or not sending)"
+alerting_up
 
 weekly_running=0
 pgrep -f "^/bin/bash .*/scheduled-jobs/scripts/weekly-upgrade.sh" >/dev/null && weekly_running=1
@@ -43,7 +70,8 @@ decision=$(ALERTS="$alerts" STATE_DIR="$STATE_DIR" STAMP="$STAMP" CAP=$DAILY_CAP
   WEEKLY=$weekly_running python3 - <<'EOF'
 import json, os, sys, time
 d = os.environ["STATE_DIR"]; now = time.time(); stamp = os.environ["STAMP"]
-alerts = json.loads(os.environ["ALERTS"])
+# Only the alerts Alertmanager sends to Discord
+alerts = [a for a in json.loads(os.environ["ALERTS"]) if any(r["name"] == "discord" for r in a.get("receivers", []))]
 def load(name, default):
     try:
         with open(os.path.join(d, name)) as f: return json.load(f)

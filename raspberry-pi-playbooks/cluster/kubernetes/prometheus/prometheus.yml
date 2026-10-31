@@ -101,6 +101,10 @@
             alertmanagerSpec:
               image:
                 pullPolicy: Always
+              # One copy on each of two nodes: with one, a hung node02 took all alerting with it for
+              # 3 days (10-27). The pair gossips, so Discord still gets each alert once.
+              replicas: 2
+              podAntiAffinity: hard
               secrets:
                 - alertmanager-discord
             config:

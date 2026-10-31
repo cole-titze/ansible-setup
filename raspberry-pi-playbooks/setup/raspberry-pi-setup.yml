@@ -17,6 +17,32 @@
       # pikvm is Arch (pacman)
       when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
 
+    # Raspberry Pi OS keeps the journal in RAM, so a hang left no logs (node02, 10-27). On disk it
+    # survives the reboot (journalctl -b -1); capped so it can't fill the drive. Alloy reads it from
+    # /var/log/journal (cluster/kubernetes/loki/loki.yml). Named to sort after the OS's
+    # 40-rpi-volatile-storage.conf, which it overrides.
+    - name: Make the journald drop-in folder
+      ansible.builtin.file:
+        path: /etc/systemd/journald.conf.d
+        state: directory
+        mode: "0755"
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
+    - name: Keep the journal on disk
+      ansible.builtin.copy:
+        dest: /etc/systemd/journald.conf.d/90-persistent.conf
+        content: |
+          [Journal]
+          Storage=persistent
+          SystemMaxUse=500M
+        mode: "0644"
+      register: journald_conf
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
+    - name: Restart journald and move the RAM journal to disk
+      ansible.builtin.shell: systemctl restart systemd-journald && journalctl --flush
+      when: journald_conf is changed
+
     # The role always adds a 2:00 "update + unconditional reboot" cron. These hosts have their own
     # staggered update crons (utilities/*-maintenance.yml), so the role's cron would reboot the
     # whole cluster at once. Remove it again after every role run.
