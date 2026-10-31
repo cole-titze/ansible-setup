@@ -43,6 +43,61 @@
       ansible.builtin.shell: systemctl restart systemd-journald && journalctl --flush
       when: journald_conf is changed
 
+    # The hardware watchdog (on by default, 40-rpi-enable-watchdog.conf) only catches a frozen
+    # kernel; node02 lost its network for 3 days (10-27) with systemd still running. See the script.
+    - name: Install the network watchdog
+      ansible.builtin.copy:
+        src: net-watchdog.sh
+        dest: /usr/local/sbin/net-watchdog.sh
+        mode: "0755"
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
+    - name: Tell the network watchdog which Pis to ping
+      ansible.builtin.copy:
+        dest: /etc/default/net-watchdog
+        content: |
+          PEERS="{{ (groups['cluster'] + groups['backup_raspberrypi']) | difference([inventory_hostname]) | map('extract', hostvars, 'ansible_host') | join(' ') }}"
+        mode: "0644"
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
+    - name: Add the network watchdog's systemd units
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.name }}"
+        content: "{{ item.content }}"
+        mode: "0644"
+      loop:
+        - name: net-watchdog.service
+          content: |
+            [Unit]
+            Description=Bounce the uplink, then reboot, when the network stays down
+
+            [Service]
+            Type=oneshot
+            ExecStart=/usr/local/sbin/net-watchdog.sh
+        - name: net-watchdog.timer
+          content: |
+            [Unit]
+            Description=Check the network every minute
+
+            [Timer]
+            OnBootSec=2min
+            OnUnitActiveSec=1min
+            AccuracySec=5s
+
+            [Install]
+            WantedBy=timers.target
+      loop_control:
+        label: "{{ item.name }}"
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
+    - name: Start the network watchdog
+      ansible.builtin.systemd_service:
+        name: net-watchdog.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: inventory_hostname in groups['cluster'] + groups['backup_raspberrypi']
+
     # The role always adds a 2:00 "update + unconditional reboot" cron. These hosts have their own
     # staggered update crons (utilities/*-maintenance.yml), so the role's cron would reboot the
     # whole cluster at once. Remove it again after every role run.
