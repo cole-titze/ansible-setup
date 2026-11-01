@@ -32,7 +32,7 @@ if len(body) > 1850:
 print(json.dumps({"content": f"**{os.environ['"'"'TITLE'"'"']}**\n{body}"[:2000]}))')
   local args=(-s -o /dev/null -w "%{http_code}" -m 30)
   if [ -n "$file" ] && [ -f "$file" ]; then
-    args+=(-F "payload_json=$payload" -F "files[0]=@$file")
+    args+=(--form-string "payload_json=$payload" -F "files[0]=@$file")
   else
     args+=(-H "Content-Type: application/json" -d "$payload")
   fi
