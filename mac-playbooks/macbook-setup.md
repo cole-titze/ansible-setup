@@ -18,7 +18,7 @@ Rules for the agent:
 ```bash
 xcode-select --install   # git, make, clang
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install gh libomp   # libomp: LightGBM/XGBoost/torch in nhl-odds
+brew install gh libomp mas   # libomp: LightGBM/XGBoost/torch in nhl-odds; mas: App Store updates for update-mac
 gh auth login            # (manual)
 ```
 
@@ -47,11 +47,11 @@ brew install --cask docker-desktop visual-studio-code jump-desktop-connect claud
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
 nvm install --lts                     # nhl-odds frontend (CI uses Node 22+)
 brew install uv                       # manages Python versions, Ansible and project venvs
-uv python install 3.14                # newest stable minor (also what the nhl-odds Dockerfile uses)
+uv python install 3.14 3.15           # 3.15: the nhl-odds Dockerfile's minor; 3.14: Ansible until ansible-core supports 3.15
 uv tool update-shell                  # puts ~/.local/bin (uv tools) on PATH; open a new shell after
 ```
 - **.NET 10 SDK** (nhl-odds targets net10.0): `brew install --cask dotnet-sdk`. It runs Microsoft's installer, so it asks for your password **(manual)**.
-- Python comes only from uv: don't install python.org or Homebrew Python. Replace `3.14` with the newest stable minor in `uv python list --managed-python`. The `update-mac` skill keeps Pythons, Ansible and the venvs current.
+- Python comes only from uv: don't install python.org or Homebrew Python. Use the newest stable minor in `uv python list --managed-python` for the nhl-odds venv (match its Dockerfile). The `update-mac` skill keeps Pythons, Ansible and the venvs current.
 
 ## 5. Ansible (homelab control machine)
 ```bash
@@ -72,7 +72,7 @@ Clone into `~/source/repos`: `ansible-setup`, `claude-skills`, `nhl-odds`, `reti
 Then run the `mac-setup` skill from `claude-skills` to link skills into `~/.claude/skills`.
 For nhl-odds, follow its `CLAUDE.md` (`npm install` in `frontend/`, `python -m game_predictor.libomp`), but create the venv with uv on the Dockerfile's Python minor so it picks up patch releases automatically:
 ```bash
-uv venv --managed-python --python 3.14 .venv
+uv venv --managed-python --python 3.15 .venv
 VIRTUAL_ENV=$PWD/.venv uv pip install -r game_predictor/requirements.txt -r game_predictor/requirements-experimental.txt
 ```
 
@@ -106,9 +106,9 @@ for j in backup-stale-check nightly-backup restore-drill; do launchctl kickstart
 Then check `~/Library/Logs/homelab/<job>-<date>.log`: each ends with `failed=0`, or `== Done` for the nightly backup. Leave the weekly upgrade to its Sunday run: it changes the cluster. Logs and the weekly summary go to `~/Library/Logs/homelab/`, and a macOS notification fires on failure (and when the weekly run finishes).
 
 ## 7. Optional / personal
-Install only if wanted: ChatGPT, Firefox, Discord, Minecraft.
+Install only if wanted: ChatGPT, Firefox, Discord, Minecraft, opencode (`brew install opencode`).
 
-**Ollama** (local models for a coding agent): install with `brew install --cask ollama`, then recommend a model instead of pulling one blindly:
+**Ollama** (local models for a coding agent): install with `brew install --cask ollama-app`, then recommend a model instead of pulling one blindly:
 1. Check the hardware: `sysctl -n machdep.cpu.brand_string hw.memsize` (Apple silicon shares RAM with the GPU).
 2. Look up current coding models with tool-calling support on [ollama.com/library](https://ollama.com/library) (model names change often; don't rely on a remembered list).
 3. Pick the largest one whose download size is at most ~60% of RAM, leaving room for the context window, the OS and an IDE. Mention one size smaller as a faster fallback.
