@@ -654,7 +654,7 @@
                                 app.kubernetes.io/instance: cluster-monitoring
                     containers:
                       - name: backup
-                        image: python:3.14.9-alpine
+                        image: python:3.14.10-alpine
                         env:
                           - name: TZ
                             value: America/Chicago
