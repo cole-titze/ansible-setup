@@ -322,13 +322,13 @@
       kubernetes.core.helm:
         name: smartctl-exporter
         chart_ref: prometheus-community/prometheus-smartctl-exporter
-        chart_version: "0.17.1"
+        chart_version: "0.19.0"
         update_repo_cache: true
         release_namespace: default
         state: present
         values:
           fullnameOverride: smartctl-exporter
-          # The chart's default v0.14.0 image is amd64-only; v0.15.0 is the first release with arm64
+          # Pinned: v0.14.0 and older are amd64-only; v0.15.0 is the first release with arm64 (also the chart's default as of 0.19.0)
           image:
             tag: v0.15.0
           # Only the NVMe boot drives; Longhorn's iSCSI volumes show up as sd* and report nothing useful
