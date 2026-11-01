@@ -6,6 +6,12 @@ PART 1 — Check this morning's weekly jobs
 - Latest run of every workflow in every app repo (nhl-odds, retirement-calculator, containers), using the k8s-major-upgrade skill's "Scheduled builds and CI" section: the Sunday image builds (nhl-odds 08:00 UTC, containers' Docker Publish 08:00 UTC), security-scan.yml, dependabot-merge.yml, and the rest. Report the conclusion and any failed jobs (`gh run view <id> --log-failed`). Read finished runs only; if a run is still in progress, note it and move on. Don't poll.
 - The weekly load test: `kubectl get jobs -n nhl-odds` for the nhl-odds-weekly-load-test job's status, and the ErrorLog rows with Source 'LoadTest' since last Sunday (query the DB the way the nhl-error-triage skill does). Report-only.
 - If a build failed for a fixable reason (e.g. a broken dependency, a flaky step), fix it per Part 3's rules; otherwise report it.
+- Uptime blips (before Part 2, so its upgrades don't muddy the week). The admin page's uptime chart counts every failed minute of the public blackbox probe; one-minute blips never fire NhlOddsSiteDown (5 min) or the burn alerts, so nothing else looks at them.
+  - List the past 7 days' failed minutes: Prometheus `query_range` (step 60) of `probe_success{job="probe/default/nhl-odds-public"} == 0` via `kubectl get --raw "/api/v1/namespaces/default/services/http:cluster-monitoring-kube-pr-prometheus:9090/proxy/api/v1/query_range?..."`. Cross-check the daily totals with the `UptimeDay` table (DB read the way the nhl-error-triage skill does; missing probes count as down there too).
+  - Classify each with `probe_http_duration_seconds` (by phase), `probe_http_status_code` and `probe_duration_seconds` at that minute: **no connect** (status 0, connect≈0: the probe never reached Cloudflare, so the home WAN or the edge), **slow** (status 200 but total hit the 5s timeout: name the slow phase), **error** (4xx/5xx; 403 = Cloudflare challenge), or **missing** (no sample: Prometheus or blackbox down).
+  - For slow, error and clustered failures, check Loki (`{namespace="nhl-odds"}`, cloudflared, Traefik, node journals) and pod restarts/events within ±5 min, plus kured reboots, the night's jobs and the last 7 days of deploys/upgrades. Name a cause only when the logs show one.
+  - Track it: append one line per day to `~/Library/Logs/homelab/uptime-blips.csv` (`day,failed,no_connect,slow,error,missing,uptime_pct,note`; create it with that header if missing, skip days already there) and compare with the previous weeks in it. Say whether it's getting worse.
+  - Report-only, unless the cause is clearly a bug in these repos with an obvious fix (e.g. a slow endpoint you can show in the logs); then fix it under Part 3's rules.
 
 PART 2 — Full /k8s-major-upgrade
 Read the whole skill and follow it in order (discover, compare, upgrade, verify, update pins/docs), including its Dependabot PRs section. Keep every safety rule, since you're unattended:
@@ -34,7 +40,7 @@ Read ~/.claude/skills/update-mac/SKILL.md and run its check, then apply only its
 Always: never force-push, never delete volumes/PVCs, never close PRs without reason. Commit and push version pins and skill updates the way the skills say (ansible-setup to main; update "Last full run"/current-state notes in claude-skills, keeping ~/.claude/skills in sync per that repo's CLAUDE.md). Leave every repo on its default branch with a clean working tree when you finish, except branches you left on purpose and reported.
 
 Finish with one summary:
-1. Weekly jobs: each workflow/job, result, and what you did about failures.
+1. Weekly jobs: each workflow/job, result, and what you did about failures. Then uptime blips: the week's uptime %, failed minutes by kind with times (CT), causes found, trend vs previous weeks, and anything fixed.
 2. Upgrades table: component, old → new (or current/skipped/blocked), health PASS/FAIL, one-line note; Dependabot PRs merged or left open and why.
 3. Security: CVEs fixed (and how), CVEs not actionable, Trivy pins, warnings fixed, warnings left, and code findings (report-only), most severe first.
 4. Mac: what was updated (old → new), what failed or was rolled back, and what's left for me.
