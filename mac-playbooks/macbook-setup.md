@@ -89,11 +89,12 @@ Install the jobs:
 ```bash
 cd ~/source/repos/ansible-setup && ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
-It installs four launchd LaunchAgents that run as you, with your tools, keys and logins:
+It installs these launchd LaunchAgents that run as you, with your tools, keys and logins:
 - `com.coletitze.nightly-backup`: daily 3:10, runs `mac-playbooks/backup/scripts/Backup.sh` (after the cluster's nhl-odds dumps, the 1:30 Grafana backup and kured's 2:00-2:55 reboots).
 - `com.coletitze.backup-stale-check`: daily 9:00, warns if a backup didn't reach iCloud overnight.
 - `com.coletitze.restore-drill`: Saturdays 4:00, restores the newest iCloud backups into a throwaway container to prove they work.
 - `com.coletitze.weekly-upgrade`: Sundays 10:00, runs Claude Code headless with `scripts/weekly-upgrade-prompt.md` (the weekly jobs check, `/k8s-major-upgrade` and `/nhl-odds-security`, applying changes unattended).
+- `com.coletitze.login-apps`: at login, starts Ollama (the nhl-odds assistant) and opens Terminal running `claude rc` in `~/source/repos` (skipped if one is already running).
 
 macOS limits launchd jobs, and the scripts already work around both limits, so don't grant Full Disk Access:
 - **iCloud Drive**: launchd's bash, docker and Claude's Bash get `Operation not permitted`; only Ansible's Python can read it. So the backup jobs do their iCloud work in playbooks, and the weekly upgrade has Ansible copy `vars/` to a private temp dir (deleted after the run) and points the cluster playbooks at it with `ANSIBLE_FILES_PATH`.

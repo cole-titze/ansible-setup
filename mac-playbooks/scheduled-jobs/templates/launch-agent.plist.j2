@@ -10,7 +10,10 @@
     <string>/bin/bash</string>
     <string>{{ scripts_dir }}/{{ item.script }}</string>
   </array>
-{% if item.interval is defined %}
+{% if item.run_at_load | default(false) %}
+  <key>RunAtLoad</key>
+  <true/>
+{% elif item.interval is defined %}
   <key>StartInterval</key>
   <integer>{{ item.interval }}</integer>
 {% else %}

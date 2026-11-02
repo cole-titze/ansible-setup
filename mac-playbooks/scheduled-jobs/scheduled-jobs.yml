@@ -51,6 +51,12 @@
         script: alert-agent.sh
         interval: 60
         process_type: Standard
+      # At login: start Ollama (nhl-odds assistant) and a Terminal running `claude rc`
+      - name: login-apps
+        label: com.coletitze.login-apps
+        script: login-apps.sh
+        run_at_load: true
+        process_type: Standard
 
   # alerting_vars.yml: alerting_discord_webhook_url, the channel the jobs report to
   vars_files:
