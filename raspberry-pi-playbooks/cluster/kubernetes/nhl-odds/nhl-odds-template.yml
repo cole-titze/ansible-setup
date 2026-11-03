@@ -53,9 +53,10 @@ data:
     {{ schema_sql.content | indent(4) }}
 
 ---
-# One Longhorn replica, kept on the instance's own node. CNPG already keeps a copy per worker,
-# and 3 Longhorn replicas per instance over the 100 Mb links timed out and rebuilt nonstop under
-# bulk writes (2026-10-17 rebuild restore).
+# One Longhorn replica, kept on the instance's own node: CNPG already keeps a copy per worker, so
+# more Longhorn replicas would only add write traffic. (On the old 100 Mb links, 3 replicas per
+# instance timed out and rebuilt nonstop under bulk writes in the 2026-10-17 rebuild restore; the
+# nodes are on 1 Gb networking now.)
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -209,6 +210,16 @@ spec:
             # turn the assistant off. Egress from nhl-odds is open, so no network policy is needed.
             - name: OLLAMA_URL
               value: http://10.42.0.60:11434
+            # Site search (/api/Search) as the read-only nhl_search_reader; remove the three to turn it off
+            - name: ELASTICSEARCH_URL
+              value: http://nhl-odds-elasticsearch:9200
+            - name: ELASTICSEARCH_USERNAME
+              value: nhl_search_reader
+            - name: ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-search-reader-credentials
+                  key: password
           livenessProbe:
             tcpSocket:
               port: 8080
@@ -262,6 +273,130 @@ spec:
   selector:
     matchLabels:
       app: nhl-odds-webapi
+
+---
+# Elasticsearch for site search (#149). One node: the index is rebuilt from Postgres every hour by the
+# search-index CronJob, so it needs no replicas or backups, and losing it only empties search until the next run.
+# Security is on: the playbook sets up nhl_search_writer (the CronJob) and nhl_search_reader (the webapi), and the
+# built-in elastic superuser is only used by the playbook and the probes. Reachable only inside the namespace
+# (network-policies allow-same-namespace); no Service port leaves the cluster.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nhl-odds-elasticsearch
+  namespace: nhl-odds
+spec:
+  replicas: 1
+  serviceName: nhl-odds-elasticsearch
+  selector:
+    matchLabels:
+      app: nhl-odds-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: nhl-odds-elasticsearch
+    spec:
+      automountServiceAccountToken: false
+      # The image runs as uid 1000, gid 0; fsGroup makes the data volume writable for it
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 0
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: elasticsearch
+          # The official image; arm64 build. Pinned: a major/minor bump can change index formats
+          image: docker.elastic.co/elasticsearch/elasticsearch:9.5.3
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            # Not read-only: the entrypoint writes ELASTIC_PASSWORD into the keystore under config/
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 9200
+          env:
+            - name: cluster.name
+              value: nhl-odds
+            - name: discovery.type
+              value: single-node
+            # Heap at half the memory limit; the rest is Lucene's off-heap memory and page cache
+            - name: ES_JAVA_OPTS
+              value: "-Xms1g -Xmx1g"
+            # mmap needs vm.max_map_count >= 262144 on the node; niofs works without touching the hosts
+            - name: node.store.allow_mmap
+              value: "false"
+            - name: xpack.security.enabled
+              value: "true"
+            # Plain HTTP inside the namespace, like Postgres; TLS would only matter across nodes
+            - name: xpack.security.http.ssl.enabled
+              value: "false"
+            - name: xpack.security.transport.ssl.enabled
+              value: "false"
+            # Features search doesn't use: machine learning, the GeoIP database download, usage stats
+            - name: xpack.ml.enabled
+              value: "false"
+            - name: ingest.geoip.downloader.enabled
+              value: "false"
+            - name: telemetry.optIn
+              value: "false"
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nhl-odds-elasticsearch-credentials
+                  key: password
+          # Cluster health as the superuser: the same check the playbook waits on
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "curl -fsS -u \"elastic:$ELASTIC_PASSWORD\" 'http://localhost:9200/_cluster/health?timeout=2s' > /dev/null"]
+            periodSeconds: 10
+            failureThreshold: 30  # starting the JVM takes a minute or two on a Pi
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "curl -fsS -u \"elastic:$ELASTIC_PASSWORD\" 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=2s' > /dev/null"]
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9200
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "1.5Gi"
+            limits:  # no CPU limit, like the other workloads
+              memory: "2Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn-db  # one Longhorn replica: the index is rebuilt hourly anyway
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhl-odds-elasticsearch
+  namespace: nhl-odds
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+      protocol: TCP
+  selector:
+    app: nhl-odds-elasticsearch
 
 ---
 apiVersion: apps/v1
@@ -659,6 +794,69 @@ spec:
                       key: password
                 - name: NHL_DATABASE
                   value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
+
+---
+# CronJob: rebuild the site-search indices from Postgres (hourly at :20, after the :00/:30 lineup snapshots
+# have saved new articles). Each index is built beside the live one and swapped in, so search stays up.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nhl-odds-entry-search-index
+  namespace: nhl-odds
+spec:
+  schedule: "20 * * * *"
+  timeZone: "America/Chicago"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+{{ wait_for_db() }}
+          containers:
+            - name: entry
+              image: "{{ image_pins['nhl-odds-entry'] }}"
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 1Gi
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RUN_MODE
+                  value: SearchIndex
+                # nhl_writer only for its ErrorLog row on failure; the index is built from reads
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-writer-credentials
+                      key: password
+                - name: NHL_DATABASE
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
+                - name: ELASTICSEARCH_URL
+                  value: http://nhl-odds-elasticsearch:9200
+                - name: ELASTICSEARCH_USERNAME
+                  value: nhl_search_writer
+                - name: ELASTICSEARCH_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: nhl-odds-search-writer-credentials
+                      key: password
 
 ---
 # CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
