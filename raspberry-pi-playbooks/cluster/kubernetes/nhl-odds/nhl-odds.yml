@@ -22,6 +22,16 @@
     restore_node: "{{ groups['storage'][0] }}"
     restore_dir: /home/pi/backups/nhl-odds
     restore_file: nhl-restore.dump
+    # Elasticsearch users: the superuser (playbook and probes only) and the two least-privilege users
+    search_users:
+      - { secret: nhl-odds-elasticsearch-credentials, username: elastic }
+      - { secret: nhl-odds-search-writer-credentials, username: nhl_search_writer }
+      - { secret: nhl-odds-search-reader-credentials, username: nhl_search_reader }
+    # What each search role may do, on the nhl-* indices only. The writer builds a new index, fills it and
+    # moves the alias (create_index, write, manage); the reader can only search.
+    search_roles:
+      nhl_search_writer: { indices: [{ names: ["nhl-*"], privileges: [create_index, write, manage] }] }
+      nhl_search_reader: { indices: [{ names: ["nhl-*"], privileges: [read] }] }
 
   vars_files:
     - "{{ ansible_files_path }}/vars/nhl_vars.yml"
@@ -96,6 +106,36 @@
       loop: "{{ db_role_secrets.results }}"
       loop_control:
         label: "nhl-odds-{{ item.item }}-credentials"
+      when: item.resources | length == 0
+
+    # Site search (Elasticsearch): the built-in elastic superuser's password, and one each for the indexer
+    # (nhl_search_writer) and the webapi (nhl_search_reader). Like the DB roles: random, created once, cluster-only.
+    - name: Read search credential secrets.
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: nhl-odds
+        name: "{{ item.secret }}"
+      loop: "{{ search_users }}"
+      loop_control:
+        label: "{{ item.secret }}"
+      register: search_secrets
+
+    - name: Create missing search credential secrets.
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ item.item.secret }}"
+            namespace: nhl-odds
+          type: kubernetes.io/basic-auth
+          stringData:
+            username: "{{ item.item.username }}"
+            password: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=32) }}"
+      loop: "{{ search_secrets.results }}"
+      loop_control:
+        label: "{{ item.item.secret }}"
       when: item.resources | length == 0
 
     - name: Apply nhl-odds manifests.
@@ -289,6 +329,56 @@
         kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
         psql -U postgres -d nhl -v ON_ERROR_STOP=1 -c 'GRANT INSERT, UPDATE ON "JobStatus" TO nhl_web'
       changed_when: false
+
+    - name: Wait for Elasticsearch
+      ansible.builtin.command: kubectl rollout status statefulset/nhl-odds-elasticsearch -n nhl-odds --timeout=600s
+      changed_when: false
+
+    # Requests go through kubectl exec as the superuser, whose password is already in the pod's environment.
+    # Bodies (with the users' passwords) go over stdin, so they never appear in a process list or this log.
+    - name: Set up the search roles.
+      ansible.builtin.command:
+        cmd: >-
+          kubectl exec -i -n nhl-odds nhl-odds-elasticsearch-0 -- sh -c
+          'curl -fsS -u "elastic:$ELASTIC_PASSWORD" -X PUT -H "Content-Type: application/json"
+          "http://localhost:9200/_security/role/{{ item.key }}" -d @-'
+        stdin: "{{ item.value | to_json }}"
+      loop: "{{ search_roles | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      changed_when: false
+
+    - name: Read search user passwords.
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: nhl-odds
+        name: "{{ item }}"
+      loop: [nhl-odds-search-writer-credentials, nhl-odds-search-reader-credentials]
+      register: search_user_secrets
+      no_log: true
+
+    - name: Set up the search users.
+      ansible.builtin.command:
+        cmd: >-
+          kubectl exec -i -n nhl-odds nhl-odds-elasticsearch-0 -- sh -c
+          'curl -fsS -u "elastic:$ELASTIC_PASSWORD" -X PUT -H "Content-Type: application/json"
+          "http://localhost:9200/_security/user/{{ item.resources[0].data.username | b64decode }}" -d @-'
+        stdin: >-
+          {{ {'password': item.resources[0].data.password | b64decode,
+              'roles': [item.resources[0].data.username | b64decode]} | to_json }}
+      loop: "{{ search_user_secrets.results }}"
+      changed_when: false
+      no_log: true
+
+    # The first index build, so search works now instead of at the next :20. Fails (without stopping the
+    # playbook) while the pinned entry image predates RUN_MODE=SearchIndex; the CronJob picks it up once promoted.
+    - name: Build the search index.
+      ansible.builtin.shell: |
+        job=nhl-odds-search-index-$(date +%s)
+        kubectl create job -n nhl-odds --from=cronjob/nhl-odds-entry-search-index "$job"
+        kubectl wait -n nhl-odds --for=condition=complete "job/$job" --timeout=600s
+      changed_when: true
+      ignore_errors: true
 
     - name: Restart webapi and scheduler to pick up credentials
       ansible.builtin.command: >
