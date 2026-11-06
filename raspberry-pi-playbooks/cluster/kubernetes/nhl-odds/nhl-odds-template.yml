@@ -220,6 +220,12 @@ spec:
                 secretKeyRef:
                   name: nhl-odds-search-reader-credentials
                   key: password
+            # Semantic article search: the query embedded by the in-cluster model (nhl-odds-embeddings below).
+            # Remove to search articles by keyword alone; down, search falls back to keywords for a minute at a time
+            - name: EMBEDDING_URL
+              value: http://nhl-odds-embeddings:11434
+            - name: EMBEDDING_MODEL
+              value: "{{ nhl_odds_embedding_model }}"
           livenessProbe:
             tcpSocket:
               port: 8080
@@ -397,6 +403,141 @@ spec:
       protocol: TCP
   selector:
     app: nhl-odds-elasticsearch
+
+---
+# Embeddings for semantic article search: Ollama serving one small embedding model on the CPU (nomic-embed-text,
+# 137M parameters, ~300 MB). A short search query embeds in well under 100 ms on a Pi 5; the hourly search-index
+# CronJob only sends new and changed articles. In the cluster rather than on the Mac so search never depends on the
+# Mac being awake. Nothing here is precious: the model re-downloads if the volume is lost.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nhl-odds-embedding-models
+  namespace: nhl-odds
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn-db  # one Longhorn replica: a lost model is just pulled again
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nhl-odds-embeddings
+  namespace: nhl-odds
+spec:
+  replicas: 1
+  # The models volume is ReadWriteOnce: the old pod lets go of it before the new one starts
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nhl-odds-embeddings
+  template:
+    metadata:
+      labels:
+        app: nhl-odds-embeddings
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # Pulls the model before the server takes requests (a no-op once it's on the volume). Needs egress to
+      # registry.ollama.ai, which nhl-odds has
+      initContainers:
+        - name: pull-model
+          image: ollama/ollama:0.40.15
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "ollama serve >/dev/null 2>&1 & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$MODEL\""]
+          env:
+            - name: HOME  # Ollama writes its key pair under ~/.ollama
+              value: /tmp
+            - name: OLLAMA_MODELS
+              value: /models
+            - name: MODEL
+              value: "{{ nhl_odds_embedding_model }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: ollama
+          # Multi-arch image; pinned like Elasticsearch so a rollout can't change the server under the model
+          image: ollama/ollama:0.40.15
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOME
+              value: /tmp
+            - name: OLLAMA_MODELS
+              value: /models
+            # Keep the model loaded: a cold load would make the first search after idle wait seconds
+            - name: OLLAMA_KEEP_ALIVE
+              value: "-1"
+            # Embedding only; never pull or serve anything else at the API's request
+            - name: OLLAMA_MAX_LOADED_MODELS
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 11434
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:  # no CPU limit, like the other workloads; the model and a batch fit well inside this
+              memory: "1.5Gi"
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: nhl-odds-embedding-models
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhl-odds-embeddings
+  namespace: nhl-odds
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 11434
+      targetPort: 11434
+      protocol: TCP
+  selector:
+    app: nhl-odds-embeddings
 
 ---
 apiVersion: apps/v1
@@ -857,6 +998,12 @@ spec:
                     secretKeyRef:
                       name: nhl-odds-search-writer-credentials
                       key: password
+                # Article vectors: new and changed articles only (the rest reuse the live index's), newest first,
+                # 30 minutes at most per run; the model being down leaves articles keyword-only, never fails the job
+                - name: EMBEDDING_URL
+                  value: http://nhl-odds-embeddings:11434
+                - name: EMBEDDING_MODEL
+                  value: "{{ nhl_odds_embedding_model }}"
 
 ---
 # CronJob: Daily prediction (6:30am CT) — replaces scheduler/daily-odds-fetch.sh step 3
