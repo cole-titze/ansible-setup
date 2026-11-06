@@ -23,14 +23,18 @@
     restore_dir: /home/pi/backups/nhl-odds
     restore_file: nhl-restore.dump
     # Elasticsearch users: the superuser (playbook and probes only) and the two least-privilege users
+    # Ollama model for article embeddings (nhl-odds-embeddings); changing it re-embeds every article over the
+    # next few hourly search-index runs
+    nhl_odds_embedding_model: nomic-embed-text
     search_users:
       - { secret: nhl-odds-elasticsearch-credentials, username: elastic }
       - { secret: nhl-odds-search-writer-credentials, username: nhl_search_writer }
       - { secret: nhl-odds-search-reader-credentials, username: nhl_search_reader }
     # What each search role may do, on the nhl-* indices only. The writer builds a new index, fills it and
-    # moves the alias (create_index, write, manage); the reader can only search.
+    # moves the alias (create_index, write, manage) and reads the live articles index to reuse its vectors
+    # (read); the reader can only search.
     search_roles:
-      nhl_search_writer: { indices: [{ names: ["nhl-*"], privileges: [create_index, write, manage] }] }
+      nhl_search_writer: { indices: [{ names: ["nhl-*"], privileges: [create_index, write, manage, read] }] }
       nhl_search_reader: { indices: [{ names: ["nhl-*"], privileges: [read] }] }
 
   vars_files:

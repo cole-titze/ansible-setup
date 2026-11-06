@@ -161,6 +161,10 @@ A nightly CronJob (`nhl-odds-db-backup`) also runs at 1am CT inside the cluster,
 
 A single-node Elasticsearch (`nhl-odds-elasticsearch`, 1 GB heap, 2Gi limit) serves the site's search. The `nhl-odds-entry-search-index` CronJob (`RUN_MODE=SearchIndex`, hourly at :20 CT) rebuilds its indices from Postgres, swapping each in when complete, so it needs no backup: if its volume is lost, search is empty until the next run. No new vars: the playbook creates random passwords once in cluster secrets (`nhl-odds-elasticsearch-credentials` for the `elastic` superuser, used only by the playbook and probes; `nhl-odds-search-writer-credentials` for the CronJob; `nhl-odds-search-reader-credentials` for the read-only webapi) and sets up the users. To look at it: `kubectl exec -it -n nhl-odds nhl-odds-elasticsearch-0 -- sh -c 'curl -u "elastic:$ELASTIC_PASSWORD" localhost:9200/_cat/indices?v'`.
 
+**Semantic article search (embeddings):**
+
+`nhl-odds-embeddings` runs Ollama on the CPU with one small embedding model (`nhl_odds_embedding_model` in `nhl-odds.yml`, default `nomic-embed-text`, ~300 MB, 1.5Gi limit). An init container pulls the model onto its 2Gi volume on first start. The search-index CronJob gives each new or changed article a vector (unchanged ones reuse the live index's, which is why `nhl_search_writer` also has `read`), and the webapi embeds each search to find articles by meaning as well as by keyword. If it's down, articles are indexed and searched by keyword only, never an error. The first run after deploying embeds every article, newest first, 30 minutes per run, so it can take a few hourly runs to catch up. To check it: `kubectl logs -n nhl-odds job/<latest search-index job> | grep "Article vectors"`.
+
 ### Utilities
 
 ```bash
