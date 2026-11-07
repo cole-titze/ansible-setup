@@ -1317,6 +1317,12 @@ rules:
   - apiGroups: [batch]
     resources: [jobs]
     verbs: [get, list, create, delete]
+  # An admin "Rebuild Search Index" runs a copy of this CronJob (kubectl create job --from), so it gets the same
+  # pinned image, Elasticsearch writer and embedding model as the hourly run
+  - apiGroups: [batch]
+    resources: [cronjobs]
+    resourceNames: [nhl-odds-entry-search-index]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
