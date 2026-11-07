@@ -281,8 +281,10 @@ spec:
       app: nhl-odds-webapi
 
 ---
-# Elasticsearch for site search (#149). One node: the index is rebuilt from Postgres every hour by the
-# search-index CronJob, so it needs no replicas or backups, and losing it only empties search until the next run.
+# Elasticsearch for site search (#149). Three nodes, one per worker, so search survives a node going down (a kured
+# reboot, a dead Pi): all three are master-eligible, so any two keep a quorum, and nhl-odds creates its indices with
+# auto_expand_replicas 0-1, so every shard has a copy on a second node. The index is still rebuilt from Postgres
+# every hour by the search-index CronJob, so it needs no backups.
 # Security is on: the playbook sets up nhl_search_writer (the CronJob) and nhl_search_reader (the webapi), and the
 # built-in elastic superuser is only used by the playbook and the probes. Reachable only inside the namespace
 # (network-policies allow-same-namespace); no Service port leaves the cluster.
@@ -292,8 +294,12 @@ metadata:
   name: nhl-odds-elasticsearch
   namespace: nhl-odds
 spec:
-  replicas: 1
-  serviceName: nhl-odds-elasticsearch
+  replicas: 3
+  # The headless Service gives each pod a DNS name (nhl-odds-elasticsearch-0.nhl-odds-elasticsearch-nodes) for discovery
+  serviceName: nhl-odds-elasticsearch-nodes
+  # All at once: a pod isn't ready until the cluster has elected a master, which takes two of them, so OrderedReady
+  # would wait forever on pod 0
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app: nhl-odds-elasticsearch
@@ -302,6 +308,15 @@ spec:
       labels:
         app: nhl-odds-elasticsearch
     spec:
+      # One per node: two on the same Pi would lose the quorum with it. While a node is drained its pod waits
+      # (Pending) for it to come back; the other two keep search up (the PDB below allows one down at a time)
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: nhl-odds-elasticsearch
       automountServiceAccountToken: false
       # The image runs as uid 1000, gid 0; fsGroup makes the data volume writable for it
       securityContext:
@@ -324,11 +339,21 @@ spec:
           ports:
             - name: http
               containerPort: 9200
+            - name: transport
+              containerPort: 9300
           env:
             - name: cluster.name
               value: nhl-odds
-            - name: discovery.type
-              value: single-node
+            - name: node.name
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: discovery.seed_hosts
+              value: >-
+                nhl-odds-elasticsearch-0.nhl-odds-elasticsearch-nodes,nhl-odds-elasticsearch-1.nhl-odds-elasticsearch-nodes,nhl-odds-elasticsearch-2.nhl-odds-elasticsearch-nodes
+            # Only read when the cluster first forms (empty data volumes); a formed cluster ignores it
+            - name: cluster.initial_master_nodes
+              value: nhl-odds-elasticsearch-0,nhl-odds-elasticsearch-1,nhl-odds-elasticsearch-2
             # Heap at half the memory limit; the rest is Lucene's off-heap memory and page cache
             - name: ES_JAVA_OPTS
               value: "-Xms1g -Xmx1g"
@@ -337,11 +362,22 @@ spec:
               value: "false"
             - name: xpack.security.enabled
               value: "true"
-            # Plain HTTP inside the namespace, like Postgres; TLS would only matter across nodes
+            # Plain HTTP inside the namespace, like Postgres
             - name: xpack.security.http.ssl.enabled
               value: "false"
+            # Node-to-node traffic must be TLS once there's more than one node with security on (a bootstrap check).
+            # One cert for all three from the playbook's own CA; "certificate" checks it's signed by that CA, not
+            # the hostname, so one cert fits every pod
             - name: xpack.security.transport.ssl.enabled
-              value: "false"
+              value: "true"
+            - name: xpack.security.transport.ssl.verification_mode
+              value: certificate
+            - name: xpack.security.transport.ssl.key
+              value: certs/transport.key
+            - name: xpack.security.transport.ssl.certificate
+              value: certs/transport.crt
+            - name: xpack.security.transport.ssl.certificate_authorities
+              value: certs/ca.crt
             # Features search doesn't use: machine learning, the GeoIP database download, usage stats
             - name: xpack.ml.enabled
               value: "false"
@@ -378,12 +414,20 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /usr/share/elasticsearch/data
+            - name: transport-certs
+              mountPath: /usr/share/elasticsearch/config/certs
+              readOnly: true
+      volumes:
+        - name: transport-certs
+          secret:
+            secretName: nhl-odds-elasticsearch-transport-certs
+            defaultMode: 0440
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: longhorn-db  # one Longhorn replica: the index is rebuilt hourly anyway
+        storageClassName: longhorn-db  # one Longhorn replica: Elasticsearch keeps its own copy on another node
         resources:
           requests:
             storage: 10Gi
@@ -403,6 +447,38 @@ spec:
       protocol: TCP
   selector:
     app: nhl-odds-elasticsearch
+
+---
+# Discovery and node-to-node traffic. Lists pods before they're ready, since they only become ready once
+# they've found each other and elected a master
+apiVersion: v1
+kind: Service
+metadata:
+  name: nhl-odds-elasticsearch-nodes
+  namespace: nhl-odds
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: transport
+      port: 9300
+      targetPort: 9300
+      protocol: TCP
+  selector:
+    app: nhl-odds-elasticsearch
+
+---
+# One node down at a time (a drain, a kured reboot): the other two keep the quorum and a copy of every shard
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nhl-odds-elasticsearch
+  namespace: nhl-odds
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: nhl-odds-elasticsearch
 
 ---
 # Embeddings for semantic article search: Ollama serving one small embedding model on the CPU (nomic-embed-text,

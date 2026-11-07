@@ -144,6 +144,111 @@
         label: "{{ item.item.secret }}"
       when: item.resources | length == 0
 
+    # Elasticsearch node-to-node TLS: a CA and one cert all three nodes share, made once and kept in a cluster
+    # secret like the passwords above. Only the nodes use them (verification_mode certificate, so no hostnames)
+    - name: Read the Elasticsearch transport cert secret.
+      kubernetes.core.k8s_info:
+        kind: Secret
+        namespace: nhl-odds
+        name: nhl-odds-elasticsearch-transport-certs
+      register: search_transport_secret
+
+    - name: Create the Elasticsearch transport certs.
+      when: search_transport_secret.resources | length == 0
+      block:
+        - name: Make a temporary directory for the transport certs.
+          ansible.builtin.tempfile:
+            state: directory
+          register: search_certs_dir
+
+        - name: Generate the transport CA and node keys.
+          community.crypto.openssl_privatekey:
+            path: "{{ search_certs_dir.path }}/{{ item }}.key"
+            size: 2048
+          loop: [ca, transport]
+
+        - name: Generate the transport CA CSR.
+          community.crypto.openssl_csr:
+            path: "{{ search_certs_dir.path }}/ca.csr"
+            privatekey_path: "{{ search_certs_dir.path }}/ca.key"
+            common_name: nhl-odds-elasticsearch-ca
+            basic_constraints: ["CA:TRUE"]
+            basic_constraints_critical: true
+            key_usage: [keyCertSign, cRLSign]
+            key_usage_critical: true
+
+        - name: Self-sign the transport CA.
+          community.crypto.x509_certificate:
+            path: "{{ search_certs_dir.path }}/ca.crt"
+            privatekey_path: "{{ search_certs_dir.path }}/ca.key"
+            csr_path: "{{ search_certs_dir.path }}/ca.csr"
+            provider: selfsigned
+            selfsigned_not_after: "+3650d"
+
+        - name: Generate the node cert CSR.
+          community.crypto.openssl_csr:
+            path: "{{ search_certs_dir.path }}/transport.csr"
+            privatekey_path: "{{ search_certs_dir.path }}/transport.key"
+            common_name: nhl-odds-elasticsearch
+            subject_alt_name: ["DNS:*.nhl-odds-elasticsearch-nodes", "DNS:*.nhl-odds-elasticsearch-nodes.nhl-odds.svc.cluster.local"]
+            extended_key_usage: [serverAuth, clientAuth]
+
+        - name: Sign the node cert with the transport CA.
+          community.crypto.x509_certificate:
+            path: "{{ search_certs_dir.path }}/transport.crt"
+            csr_path: "{{ search_certs_dir.path }}/transport.csr"
+            provider: ownca
+            ownca_path: "{{ search_certs_dir.path }}/ca.crt"
+            ownca_privatekey_path: "{{ search_certs_dir.path }}/ca.key"
+            ownca_not_after: "+3650d"
+
+        - name: Read the transport certs.
+          ansible.builtin.slurp:
+            src: "{{ search_certs_dir.path }}/{{ item }}"
+          loop: [ca.crt, transport.crt, transport.key]
+          register: search_certs
+          no_log: true
+
+        # The CA key isn't kept: a new node cert means a new CA (delete the secret and re-run the playbook)
+        - name: Create the transport cert secret.
+          kubernetes.core.k8s:
+            state: present
+            definition:
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: nhl-odds-elasticsearch-transport-certs
+                namespace: nhl-odds
+              type: Opaque
+              data: "{{ dict(search_certs.results | map(attribute='item') | zip(search_certs.results | map(attribute='content'))) }}"
+          no_log: true
+
+      always:
+        - name: Remove the temporary transport cert files.
+          ansible.builtin.file:
+            path: "{{ search_certs_dir.path }}"
+            state: absent
+          when: search_certs_dir.path is defined
+
+    # One-time move from the single-node Elasticsearch: a StatefulSet's serviceName can't change, and its volume
+    # holds a one-node cluster the new three would have to join. Search is empty until "Build the search index"
+    # below (the index is rebuilt from Postgres anyway); the search users are re-created below too.
+    - name: Read the Elasticsearch StatefulSet.
+      kubernetes.core.k8s_info:
+        kind: StatefulSet
+        namespace: nhl-odds
+        name: nhl-odds-elasticsearch
+      register: search_statefulset
+
+    - name: Remove the single-node Elasticsearch and its volume.
+      when:
+        - search_statefulset.resources | length > 0
+        - search_statefulset.resources[0].spec.serviceName != 'nhl-odds-elasticsearch-nodes'
+      ansible.builtin.shell: |
+        kubectl delete statefulset -n nhl-odds nhl-odds-elasticsearch --wait=true --timeout=300s
+        kubectl delete pvc -n nhl-odds data-nhl-odds-elasticsearch-0 --ignore-not-found --wait=true --timeout=300s
+      changed_when: true
+
     - name: Apply nhl-odds manifests.
       kubernetes.core.k8s:
         definition: "{{ lookup('template', 'nhl-odds-template.yml') }}"
