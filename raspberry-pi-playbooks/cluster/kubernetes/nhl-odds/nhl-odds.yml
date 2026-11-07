@@ -23,9 +23,11 @@
     restore_dir: /home/pi/backups/nhl-odds
     restore_file: nhl-restore.dump
     # Elasticsearch users: the superuser (playbook and probes only) and the two least-privilege users
-    # Ollama model for article embeddings (nhl-odds-embeddings); changing it re-embeds every article over the
-    # next few hourly search-index runs
-    nhl_odds_embedding_model: nomic-embed-text
+    # Ollama model for article embeddings (nhl-odds-embeddings). Pinned to a version tag, not "latest", because the
+    # init container pulls it on every pod start: a moved tag would swap the weights under the same name, and
+    # vectors from two weight sets don't compare. Changing it re-embeds every article over the next few hourly
+    # search-index runs (keyword-only until then) and needs EMBEDDING_MIN_SIMILARITY re-checked (k8s-major-upgrade)
+    nhl_odds_embedding_model: "nomic-embed-text:v1.5"
     search_users:
       - { secret: nhl-odds-elasticsearch-credentials, username: elastic }
       - { secret: nhl-odds-search-writer-credentials, username: nhl_search_writer }
