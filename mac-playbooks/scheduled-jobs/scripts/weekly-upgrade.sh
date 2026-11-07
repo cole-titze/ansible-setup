@@ -39,7 +39,14 @@ if [ $status -ne 0 ]; then
   discord_post "❌ Weekly upgrade FAILED (exit $status)" "Log: $LOG" "$SUMMARY"
 else
   notify "Weekly homelab upgrade done" "Summary: $SUMMARY"
-  discord_post "🛠️ Weekly upgrade done" "$(cat "$SUMMARY" 2>/dev/null || echo "No summary written. Log: $LOG")" "$SUMMARY"
+  # Only the TL;DR (above "## Details") goes in the message; the whole summary is attached.
+  # No "## Details" line: the whole summary, cut short by discord_post.
+  if [ -s "$SUMMARY" ]; then
+    tldr=$(awk '/^##[[:space:]]*Details/ { exit } { print }' "$SUMMARY")
+  else
+    tldr="No summary written. Log: $LOG"
+  fi
+  discord_post "🛠️ Weekly upgrade done" "$tldr" "$SUMMARY"
 fi
 
 find "$LOG_DIR" -name 'weekly-upgrade-*' -mtime +90 -delete

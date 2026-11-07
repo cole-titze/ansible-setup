@@ -39,8 +39,25 @@ Read ~/.claude/skills/update-mac/SKILL.md and run its check, then apply only its
 
 Always: never force-push, never delete volumes/PVCs, never close PRs without reason. Commit and push version pins and skill updates the way the skills say (ansible-setup to main; update "Last full run"/current-state notes in claude-skills, keeping ~/.claude/skills in sync per that repo's CLAUDE.md). Leave every repo on its default branch with a clean working tree when you finish, except branches you left on purpose and reported.
 
-Finish with one summary:
-1. Weekly jobs: each workflow/job, result, and what you did about failures. Then uptime blips: the week's uptime %, failed minutes by kind with times (CT), causes found, trend vs previous weeks, and anything fixed.
-2. Upgrades table: component, old → new (or current/skipped/blocked), health PASS/FAIL, one-line note; Dependabot PRs merged or left open and why.
-3. Security: CVEs fixed (and how), CVEs not actionable, Trivy pins, warnings fixed, warnings left, and code findings (report-only), most severe first.
-4. Mac: what was updated (old → new), what failed or was rolled back, and what's left for me.
+Finish with one summary. I read it on my phone: Discord shows only the part above `## Details` and attaches the whole file. Keep it short and plain. Leave out anything that passed and didn't change, except as one grouped line.
+
+Use this layout exactly:
+
+**Weekly upgrade YYYY-MM-DD: ✅ all good / ⚠️ needs you / ❌ something broke**
+
+**Changed**
+- One bullet per real change: `component old → new`, a CVE fix, a workflow fix, a merged PR. Group small ones (e.g. "12 Homebrew formulae, 3 casks"). Write "Nothing" if there were none.
+
+**Needs you**
+- One bullet per thing I have to do or decide: failures, rollbacks, blocked upgrades, branches you left, open PRs, skipped Mac updates. Say what to do in a few words. Write "Nothing" if there's nothing.
+
+**Uptime** NN.NN% (N failed min; trend: better/same/worse)
+
+Each bullet is one line of 100 characters or less, and the whole part above `## Details` stays under about 1200 characters. Use no tables up there.
+
+## Details
+Short sections, one line per item. Mention items that passed and didn't change only as one grouped line (e.g. "All other workflows green", "Traefik, Longhorn, CNPG current").
+1. Weekly jobs: failed or still-running workflows/jobs and what you did. Uptime blips: failed minutes by kind with times (CT), causes found, trend vs previous weeks, anything fixed.
+2. Upgrades: a line per component that moved, failed or was blocked (old → new, health PASS/FAIL, short note). Then Dependabot PRs merged or left open and why.
+3. Security: CVEs fixed and how, CVEs not actionable, Trivy pins, warnings fixed or left, code findings (report-only), most severe first.
+4. Mac: what was updated, what failed or was rolled back, what's left for me.
