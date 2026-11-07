@@ -382,7 +382,8 @@
       ansible.builtin.shell: |
         job=nhl-odds-search-index-$(date +%s)
         kubectl create job -n nhl-odds --from=cronjob/nhl-odds-entry-search-index "$job"
-        kubectl wait -n nhl-odds --for=condition=complete "job/$job" --timeout=600s
+        # Up to 30 minutes of it can be embedding article vectors (the first deploy, or a new embedding model)
+        kubectl wait -n nhl-odds --for=condition=complete "job/$job" --timeout=2700s
       changed_when: true
       ignore_errors: true
 
