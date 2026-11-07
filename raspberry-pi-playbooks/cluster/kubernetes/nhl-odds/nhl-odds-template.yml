@@ -487,6 +487,10 @@ spec:
             # Embedding only; never pull or serve anything else at the API's request
             - name: OLLAMA_MAX_LOADED_MODELS
               value: "1"
+            # Two requests at once: the search-index job's batch in one slot and a search's query in the other, so
+            # a query never waits behind a batch past the webapi's 2 s timeout. The job itself sends one at a time
+            - name: OLLAMA_NUM_PARALLEL
+              value: "2"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
