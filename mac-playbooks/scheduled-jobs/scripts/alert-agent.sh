@@ -216,7 +216,13 @@ EOF
 fi
 
 if [ -s "$REPORT" ]; then
-  discord_post "🤖 Alert agent: $names" "$(cat "$REPORT")"
+  # Only the part above "## Details" goes in the message, with the whole report attached.
+  # No "## Details" line (test or resolved alerts): the whole report, no attachment.
+  if grep -qE '^##[[:space:]]*Details' "$REPORT"; then
+    discord_post "🤖 Alert agent: $names" "$(awk '/^##[[:space:]]*Details/ { exit } { print }' "$REPORT")" "$REPORT"
+  else
+    discord_post "🤖 Alert agent: $names" "$(cat "$REPORT")"
+  fi
 elif [ $status -ne 0 ]; then
   discord_post "🤖 Alert agent: $names" "Session failed or timed out (exit $status) without a report. Log: $LOG"
 else
