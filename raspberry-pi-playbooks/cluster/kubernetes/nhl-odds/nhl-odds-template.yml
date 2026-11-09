@@ -484,40 +484,31 @@ spec:
 # Embeddings for semantic article search: Ollama serving one small embedding model on the CPU (nomic-embed-text,
 # 137M parameters, ~300 MB). A short search query embeds in well under 100 ms on a Pi 5; the hourly search-index
 # CronJob only sends new and changed articles. In the cluster rather than on the Mac so search never depends on the
-# Mac being awake. Nothing here is precious: the model re-downloads if the volume is lost.
+# Mac being awake. Nothing here is precious: the model re-downloads if a volume is lost.
 # Two copies of the same server: nhl-odds-embeddings for the search-index job's batches and nhl-odds-embeddings-query
 # for the webapi's search queries. Ollama runs embedding models with one slot whatever OLLAMA_NUM_PARALLEL says, so
 # on one server a query waits behind a batch request (~10 s each on a busy Pi) past the webapi's 2 s timeout, and
 # search drops to keywords while a big re-embed runs. Kept on different nodes when there's room, since a batch takes
-# every core of its node.
+# every core of its node. Two replicas of each, so a drain or kured reboot never takes one away; a StatefulSet so
+# each replica keeps its own copy of the model (ReadWriteOnce volumes can't be shared across nodes).
 {% for emb in [
-  {'name': 'nhl-odds-embeddings', 'pvc': 'nhl-odds-embedding-models', 'other': 'nhl-odds-embeddings-query'},
-  {'name': 'nhl-odds-embeddings-query', 'pvc': 'nhl-odds-embedding-query-models', 'other': 'nhl-odds-embeddings'},
+  {'name': 'nhl-odds-embeddings', 'other': 'nhl-odds-embeddings-query'},
+  {'name': 'nhl-odds-embeddings-query', 'other': 'nhl-odds-embeddings'},
 ] %}
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ emb.pvc }}
-  namespace: nhl-odds
-spec:
-  accessModes: ["ReadWriteOnce"]
-  storageClassName: longhorn-db  # one Longhorn replica: a lost model is just pulled again
-  resources:
-    requests:
-      storage: 2Gi
-
----
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ emb.name }}
   namespace: nhl-odds
 spec:
-  replicas: 1
-  # The models volume is ReadWriteOnce: the old pod lets go of it before the new one starts
-  strategy:
-    type: Recreate
+  replicas: 2
+  serviceName: {{ emb.name }}
+  podManagementPolicy: Parallel
+  # Keep the model volumes if the set is scaled down or deleted (re-pulling is cheap, but nothing gains from it)
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
   selector:
     matchLabels:
       app: {{ emb.name }}
@@ -526,10 +517,17 @@ spec:
       labels:
         app: {{ emb.name }}
     spec:
+      # Spread the two replicas over nodes first, then away from the other server's
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: {{ emb.name }}
+            - weight: 50
               podAffinityTerm:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
@@ -582,6 +580,8 @@ spec:
             # Embedding only; never pull or serve anything else at the API's request
             - name: OLLAMA_MAX_LOADED_MODELS
               value: "1"
+            - name: MODEL
+              value: "{{ nhl_odds_embedding_model }}"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -589,11 +589,15 @@ spec:
           ports:
             - name: http
               containerPort: 11434
+          # Ready only once the model answers an embed. Ollama loads a model on its first request, not at start, and
+          # drops the load if that client gives up: the webapi's 2 s query timeout is shorter than a load on a Pi, so
+          # without this a fresh query server never warms up. Also reloads it if it's ever unloaded. Long timeout
+          # because on the batch server the probe waits behind a batch request
           readinessProbe:
-            httpGet:
-              path: /
-              port: 11434
+            exec:
+              command: ["sh", "-c", "ollama run \"$MODEL\" ready >/dev/null"]
             periodSeconds: 15
+            timeoutSeconds: 60
           livenessProbe:
             httpGet:
               path: /
@@ -612,11 +616,29 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
-        - name: models
-          persistentVolumeClaim:
-            claimName: {{ emb.pvc }}
         - name: tmp
           emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: models
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn-db  # one Longhorn replica: a lost model is just pulled again
+        resources:
+          requests:
+            storage: 2Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ emb.name }}
+  namespace: nhl-odds
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ emb.name }}
 
 ---
 apiVersion: v1
