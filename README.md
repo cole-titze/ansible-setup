@@ -206,7 +206,7 @@ Re-run the jobs and Remote Control playbooks after changing the vars in `~/sourc
 Two logins, both done once by hand as `pi` on the Pi (`ssh -i ~/.ssh/dockerpibackup pi@10.42.0.3`):
 
 1. **Alert agent:** `claude setup-token` (a one-year, inference-only token). Put the token in `/etc/homelab/claude-oauth-token` (root, 0600), then re-run the alert agent playbook to start its timer.
-2. **Remote Control:** `claude auth login` (Remote Control needs a full login; use a claude.ai account with two-factor login on, since it can drive the homelab). Run `claude` once in `~/source/repos/ansible-setup` to accept the folder trust prompt, then re-run the Remote Control playbook to start `claude-rc.service`.
+2. **Remote Control:** `claude auth login` (Remote Control needs a full login; use a claude.ai account with two-factor login on, since it can drive the homelab). Run `claude` once in `~/source/repos/ansible-setup` to accept the folder trust prompt (it defaults to "No, exit"), and `claude remote-control` once to answer its "Enable Remote Control?" prompt (y), then re-run the Remote Control playbook to start `claude-rc.service`.
 
 Then open the Claude app (or claude.ai/code): the session is named **backup-pi**. Every command that isn't on the allow list in `utilities/files/homelab/claude-rc-settings.json` asks for approval in the app; resets, uninstalls, `kubectl delete` and the secrets are denied. Playbooks run through `homelab-run <playbook> [options]`, one at a time, logged to `/var/log/homelab/runs/`.
 

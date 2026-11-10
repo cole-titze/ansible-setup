@@ -155,7 +155,7 @@
           WorkingDirectory={{ repo_dir }}
           Environment=PATH=/home/pi/.local/bin:/usr/local/bin:/usr/bin:/bin
           Environment=KUBECONFIG=/home/pi/.kube/config
-          ExecStart=/home/pi/.local/bin/claude remote-control --name backup-pi --permission-mode default --settings /etc/homelab-claude-rc-settings.json
+          ExecStart=/home/pi/.local/bin/claude remote-control --name backup-pi --spawn=same-dir --permission-mode default --settings /etc/homelab-claude-rc-settings.json
           Restart=always
           RestartSec=30
 
