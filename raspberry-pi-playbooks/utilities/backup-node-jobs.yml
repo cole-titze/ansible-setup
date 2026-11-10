@@ -41,6 +41,7 @@
         suites: ["trixie-pgdg"]
         components: [main]
         signed_by: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        install_python_debian: true
 
     - name: Install PostgreSQL 18 and sqlite3 for the restore drill
       ansible.builtin.apt:

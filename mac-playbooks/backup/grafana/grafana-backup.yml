@@ -30,10 +30,11 @@
         - "{{ staging_backup_dir }}"
         - "{{ local_backup_dir }}"
 
-    # Small files, so mirror the Pi's folder (--delete drops ones the Pi has aged out)
+    # Small files, so pull the Pi's whole folder (no --delete: the Pi's read-only rrsync refuses it;
+    # staging is pruned below)
     - name: Pull the Grafana DBs from the backup Pi to staging
       ansible.builtin.command:
-        argv: [/usr/bin/rsync, -t, --delete, --partial-dir=.rsync-partial,
+        argv: [/usr/bin/rsync, -rt, --partial-dir=.rsync-partial,
                "--include=grafana-*.db", --include=SHA256SUMS, "--exclude=*",
                -e, "{{ rsync_ssh }}", "{{ backup_pi }}:grafana/", "{{ staging_backup_dir }}"]
       changed_when: false
@@ -55,6 +56,14 @@
         file_type: file
       register: staged_backups
 
+    - name: Remove all but the newest staged Grafana backups (names are dated)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[local_keep:] }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+
     # force: false skips DBs already in iCloud without checksumming them
     - name: Copy new Grafana backups into iCloud
       ansible.builtin.copy:
@@ -62,7 +71,7 @@
         dest: "{{ local_backup_dir }}"
         force: false
         mode: "0644"
-      loop: "{{ staged_backups.files }}"
+      loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[:local_keep] }}"
       loop_control:
         label: "{{ item.path | basename }}"
       register: icloud_copies

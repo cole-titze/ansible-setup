@@ -64,7 +64,7 @@ update_sums "$BACKUPS/nhl-odds" 'nhl-????-??-??.dump'
 # ---- Grafana -------------------------------------------------------------------------------
 # A worker that has never run the CronJob has no grafana folder; that's not an error
 for host in "$@"; do
-  rsync -t --partial-dir=.rsync-partial --include='grafana-*.db' --exclude='*' -e "$SSH" \
+  rsync -rt --partial-dir=.rsync-partial --include='grafana-*.db' --exclude='*' -e "$SSH" \
     "pi@$host:grafana/" "$BACKUPS/grafana/" 2>/dev/null && log "grafana: synced from $host"
 done
 keep_newest "$BACKUPS/grafana" 'grafana-*.db' $GRAFANA_KEEP
