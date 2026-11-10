@@ -1,0 +1,192 @@
+---
+# The alert agent on the backup Pi (ansible-setup #24; moved from the Mac's launchd job). Every
+# minute homelab-alert-agent (root) asks Alertmanager for new alerts it sent to Discord and runs a
+# headless Claude Code session as pi to investigate and apply safe fixes; the report goes to Discord.
+# Sets up for pi: the claude CLI, kubectl + kubeconfig, an ssh key to the nodes (used only through
+# homelab-node's allowlist), and read-only clones of ansible-setup and nhl-odds refreshed daily.
+# The Claude login is a long-lived token from `claude setup-token` in root-only
+# /etc/homelab/claude-oauth-token, written by hand; the timer is only enabled once it exists.
+# Logs: /var/log/homelab/alert-agent-*.log and alert-agent-poll.log; reports in ~pi/alert-agent/.
+- name: Let the backup Pi's pi user reach the nodes
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Create pi's key for the nodes
+      community.crypto.openssh_keypair:
+        path: /home/pi/.ssh/homelab_nodes
+        type: ed25519
+        comment: homelab-nodes@{{ inventory_hostname }}
+        owner: pi
+        group: pi
+      register: nodes_key
+
+- name: Authorize the backup Pi's node key
+  hosts: cluster
+  gather_facts: false
+  become: true
+
+  tasks:
+    # sudo for the allowlisted commands; the allowlist itself is in homelab-node on the Pi
+    - name: Authorize the backup Pi's key for pi
+      ansible.posix.authorized_key:
+        user: pi
+        key: "{{ hostvars[groups['backup_raspberrypi'][0]].nodes_key.public_key }}"
+
+    - name: Read the kubeconfig
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/k3s.yaml
+      register: kubeconfig
+      when: inventory_hostname in groups['control_plane']
+
+- name: Alert agent on the backup Pi
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  vars:
+    # Match the K3s server's minor
+    kubectl_version: v1.36.5
+    control_plane: "{{ groups['control_plane'][0] }}"
+    repos:
+      - { name: ansible-setup, url: "https://github.com/cole-titze/ansible-setup.git" }
+      - { name: nhl-odds, url: "https://github.com/cole-titze/nhl-odds.git" }
+
+  tasks:
+    # ---- Tools -------------------------------------------------------------------------------
+    - name: Install kubectl
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/arm64/kubectl"
+        checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/arm64/kubectl.sha256"
+        dest: /usr/local/bin/kubectl
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install git and jq
+      ansible.builtin.apt:
+        name: [git, jq, dnsutils]
+        state: present
+
+    # Native installer: ~pi/.local/bin/claude, which keeps itself up to date
+    - name: Install Claude Code for pi
+      ansible.builtin.shell: curl -fsSL https://claude.ai/install.sh | bash
+      args:
+        creates: /home/pi/.local/bin/claude
+      become_user: pi
+
+    - name: Make pi's kube directory
+      ansible.builtin.file:
+        path: /home/pi/.kube
+        state: directory
+        owner: pi
+        group: pi
+        mode: "0700"
+
+    - name: Write pi's kubeconfig (K3s API on the control plane)
+      ansible.builtin.copy:
+        content: "{{ hostvars[control_plane].kubeconfig.content | b64decode
+                     | replace('https://127.0.0.1:6443', 'https://' ~ hostvars[control_plane].ansible_host ~ ':6443') }}"
+        dest: /home/pi/.kube/config
+        owner: pi
+        group: pi
+        mode: "0600"
+      no_log: true
+
+    # ---- Repos the session reads ---------------------------------------------------------------
+    - name: Clone the repos for pi (read-only, anonymous)
+      ansible.builtin.git:
+        repo: "{{ item.url }}"
+        dest: "/home/pi/source/repos/{{ item.name }}"
+        depth: 1
+        update: false
+      loop: "{{ repos }}"
+      loop_control:
+        label: "{{ item.name }}"
+      become_user: pi
+
+    - name: Refresh the repos daily
+      ansible.builtin.cron:
+        name: "Refresh {{ item.name }} for the alert agent"
+        job: "cd /home/pi/source/repos/{{ item.name }} && git pull --ff-only --quiet >/dev/null 2>&1"
+        minute: "20"
+        hour: "5"
+        user: pi
+      loop: "{{ repos }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # ---- Scripts -----------------------------------------------------------------------------
+    - name: Install the alert agent and node wrapper
+      ansible.builtin.copy:
+        src: "files/homelab/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { src: alert-agent.sh, dest: /usr/local/bin/homelab-alert-agent, mode: "0755" }
+        - { src: homelab-node.sh, dest: /usr/local/bin/homelab-node, mode: "0755" }
+        - { src: alert-agent-prompt.md, dest: /usr/local/lib/homelab/alert-agent-prompt.md, mode: "0644" }
+      loop_control:
+        label: "{{ item.dest }}"
+
+    # ---- Timer -------------------------------------------------------------------------------
+    - name: Write the alert agent service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-alert-agent.service
+        content: |
+          [Unit]
+          Description=Investigate new homelab alerts with headless Claude Code
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/homelab-alert-agent
+        owner: root
+        group: root
+        mode: "0644"
+      register: service
+
+    # A run still going when the next minute comes is skipped, so sessions never overlap
+    - name: Write the alert agent timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-alert-agent.timer
+        content: |
+          [Unit]
+          Description=Check for new homelab alerts every minute
+
+          [Timer]
+          OnCalendar=*-*-* *:*:00
+          AccuracySec=5s
+
+          [Install]
+          WantedBy=timers.target
+        owner: root
+        group: root
+        mode: "0644"
+      register: timer
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: service.changed or timer.changed
+
+    - name: Check for the Claude token
+      ansible.builtin.stat:
+        path: /etc/homelab/claude-oauth-token
+      register: token
+
+    - name: Enable the alert agent timer
+      ansible.builtin.systemd:
+        name: homelab-alert-agent.timer
+        state: started
+        enabled: true
+      when: token.stat.exists and token.stat.size > 0
+
+    - name: Say the timer waits for the token
+      ansible.builtin.debug:
+        msg: "Not enabled: put a `claude setup-token` token in /etc/homelab/claude-oauth-token (root, 0600) and re-run."
+      when: not (token.stat.exists and token.stat.size > 0)
