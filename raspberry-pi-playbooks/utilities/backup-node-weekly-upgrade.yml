@@ -49,6 +49,14 @@
         label: "{{ item.name }}"
       become_user: pi
 
+    - name: Clone the repos (through gh's git credentials)
+      ansible.builtin.git:
+        repo: "https://github.com/cole-titze/{{ item }}.git"
+        dest: "{{ repos_dir }}/{{ item }}"
+        update: false
+      loop: "{{ repos }}"
+      become_user: pi
+
     # The alert agent's playbook makes shallow clones of ansible-setup and nhl-odds; the weekly run
     # commits and pushes, so give it full history
     - name: Unshallow existing clones
@@ -56,14 +64,6 @@
       args:
         chdir: "{{ repos_dir }}/{{ item }}"
         removes: "{{ repos_dir }}/{{ item }}/.git/shallow"
-      loop: "{{ repos }}"
-      become_user: pi
-
-    - name: Clone the repos (through gh's git credentials)
-      ansible.builtin.git:
-        repo: "https://github.com/cole-titze/{{ item }}.git"
-        dest: "{{ repos_dir }}/{{ item }}"
-        update: false
       loop: "{{ repos }}"
       become_user: pi
 
