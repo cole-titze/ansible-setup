@@ -2,15 +2,17 @@
 # Claude Code Remote Control on the backup Pi (ansible-setup #24): drive Claude from the Claude app
 # to run playbooks without the Mac. claude-rc.service runs `claude remote-control` as pi in
 # ~pi/source/repos/ansible-setup. It connects outbound only, so the Pi's firewall is unchanged.
-# Sets up for pi: Ansible, ssh access to every inventory host (the inventory's ~/.ssh/<host> names
+# Sets up for pi: Ansible, ssh access to the Pis (the inventory's ~/.ssh/<host> names
 # point at pi's homelab_nodes key, from backup-node-alert-agent.yml), the vaulted vars and the vault
 # password (copied from the Mac; re-run after changing them), the roles, and homelab-run.
 # Permissions: /etc/homelab/claude-rc-settings.json (root-owned, so sessions can't change it):
 # default mode, so anything not on its allow list asks in the app; resets, deletes and secrets denied.
 # Login: `claude auth login` as pi, by hand (setup-token isn't enough for Remote Control); the
 # service is only enabled once ~pi/.claude/.credentials.json exists.
-- name: Let pi on the backup Pi reach the backup Pi and the PiKVM
-  hosts: backup_raspberrypi:pikvms
+# Not the PiKVM: its root filesystem is read-only and "pikvm" doesn't resolve from the Pi; run
+# PiKVM playbooks from the Mac.
+- name: Let pi on the backup Pi ssh to the backup Pi itself
+  hosts: backup_raspberrypi
   gather_facts: false
   become: true
 
@@ -25,7 +27,7 @@
     # The backup Pi's own playbooks connect to 10.42.0.3 over ssh too
     - name: Authorize pi's node key
       ansible.posix.authorized_key:
-        user: "{{ ansible_user | default('pi') }}"
+        user: pi
         key: "{{ nodes_pub.content | b64decode }}"
 
 - name: Remote Control on the backup Pi
@@ -38,7 +40,7 @@
     ansible_files: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or mac_home + '/source/ansible-files' }}"
     repo_dir: /home/pi/source/repos/ansible-setup
     # The inventory's ssh key file names, all pi's node key on the Pi
-    inventory_keys: [node01, node02, node03, node04, dockerpibackup, pikvm]
+    inventory_keys: [node01, node02, node03, node04, dockerpibackup]
 
   tasks:
     # ---- Ansible -----------------------------------------------------------------------------
@@ -71,7 +73,7 @@
 
     - name: Scan the inventory hosts' ssh keys
       ansible.builtin.command: "ssh-keyscan -T 5 -t ed25519 {{ item }}"
-      loop: "{{ groups['raspberrypis'] | map('extract', hostvars, 'ansible_host') | unique | list }}"
+      loop: "{{ groups['cluster'] | union(groups['backup_raspberrypi']) | map('extract', hostvars, 'ansible_host') | unique | list }}"
       register: host_keys
       changed_when: false
 
