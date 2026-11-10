@@ -1,0 +1,182 @@
+---
+# The backup Pi's scheduled homelab jobs (ansible-setup #24: run the homelab without the Mac).
+# - backup-stale-check (daily 9:00): Discord alert if the 4:00 pull's newest nhl-odds dump or
+#   Grafana DB is over a day old, or the Mac hasn't copied them to iCloud for 2 days
+# - restore-drill (Sat 5:00): restores the newest dump into a throwaway PostgreSQL 18 and checks
+#   the newest Grafana DB
+# - The Mac's offsite key: read-only rsync of /home/pi/backups for its nightly iCloud copy, plus
+#   "mark-copied" so the stale check knows the copy happened
+# systemd timers with Persistent=true, so a run missed while the Pi was off happens at boot.
+# Scripts: utilities/files/homelab/. Logs: /var/log/homelab/ (and journalctl -u homelab-<job>).
+# Run one now: sudo systemctl start homelab-<job>.service
+- name: Backup Pi homelab jobs
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  vars:
+    mac_offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
+    homelab_jobs:
+      - name: backup-stale-check
+        script: backup-stale-check.sh
+        description: Check the nightly backups reached the backup Pi and the Mac's iCloud copy
+        on_calendar: "*-*-* 09:00:00"
+      - name: restore-drill
+        script: restore-drill.sh
+        description: Restore the newest nhl-odds dump and Grafana DB to prove they work
+        on_calendar: "Sat *-*-* 05:00:00"
+
+  # alerting_vars.yml: alerting_discord_webhook_url, the channel the jobs report to
+  vars_files:
+    - "{{ lookup('env', 'ANSIBLE_FILES_PATH') or lookup('env', 'HOME') + '/source/ansible-files' }}/vars/alerting_vars.yml"
+
+  tasks:
+    # ---- Packages ----------------------------------------------------------------------------
+    # Debian ships PostgreSQL 17; the drill needs prod's major (18) to read the dumps
+    - name: Add the PostgreSQL apt repo (PGDG)
+      ansible.builtin.deb822_repository:
+        name: pgdg
+        types: [deb]
+        uris: https://apt.postgresql.org/pub/repos/apt
+        suites: ["trixie-pgdg"]
+        components: [main]
+        signed_by: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+
+    - name: Install PostgreSQL 18 and sqlite3 for the restore drill
+      ansible.builtin.apt:
+        name: [postgresql-18, sqlite3]
+        state: present
+        update_cache: true
+
+    # The drill starts its own throwaway server; nothing should run on 5432
+    - name: Drop the package's default cluster
+      ansible.builtin.command: pg_dropcluster --stop 18 main
+      args:
+        removes: /etc/postgresql/18/main
+
+    - name: Keep the PostgreSQL service off
+      ansible.builtin.systemd:
+        name: postgresql
+        state: stopped
+        enabled: false
+
+    # ---- Scripts and secrets -----------------------------------------------------------------
+    - name: Make the homelab directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: /usr/local/lib/homelab, mode: "0755" }
+        - { path: /etc/homelab, mode: "0700" }
+        - { path: /var/lib/homelab, mode: "0755" }
+        - { path: /var/log/homelab, mode: "0750" }
+
+    - name: Write the Discord webhook (root-only)
+      ansible.builtin.copy:
+        content: "{{ alerting_discord_webhook_url }}\n"
+        dest: /etc/homelab/discord-webhook
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Install the shared job functions
+      ansible.builtin.copy:
+        src: files/homelab/common.sh
+        dest: /usr/local/lib/homelab/common.sh
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install the job scripts
+      ansible.builtin.copy:
+        src: "files/homelab/{{ item }}"
+        dest: "/usr/local/bin/homelab-{{ item | regex_replace('\\.sh$', '') }}"
+        owner: root
+        group: root
+        mode: "0755"
+      loop: [backup-stale-check.sh, restore-drill.sh, offsite-access.sh]
+
+    # ---- The Mac's offsite key ---------------------------------------------------------------
+    - name: Create the Mac's offsite key
+      community.crypto.openssh_keypair:
+        path: "{{ mac_offsite_key }}"
+        type: ed25519
+        comment: offsite-copy@macbook
+      delegate_to: localhost
+      become: false
+      register: mac_key
+
+    # The forced command runs as pi, so pi owns the marker it writes
+    - name: Create the Mac's last-copied marker
+      ansible.builtin.file:
+        path: /var/lib/homelab/mac-last-copied
+        state: touch
+        owner: pi
+        group: pi
+        mode: "0644"
+        modification_time: preserve
+        access_time: preserve
+
+    - name: Authorize the Mac's key, limited to reading the backups and marking a copy done
+      ansible.posix.authorized_key:
+        user: pi
+        key: "{{ mac_key.public_key }}"
+        key_options: 'restrict,command="/usr/local/bin/homelab-offsite-access"'
+
+    # ---- Timers ------------------------------------------------------------------------------
+    - name: Write the job services
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/homelab-{{ item.name }}.service"
+        content: |
+          [Unit]
+          Description={{ item.description }}
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/homelab-{{ item.script | regex_replace('\.sh$', '') }}
+          Nice=10
+          IOSchedulingClass=idle
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ homelab_jobs }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: services
+
+    - name: Write the job timers
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/homelab-{{ item.name }}.timer"
+        content: |
+          [Unit]
+          Description={{ item.description }} (schedule)
+
+          [Timer]
+          OnCalendar={{ item.on_calendar }}
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ homelab_jobs }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: timers
+
+    - name: Enable the job timers
+      ansible.builtin.systemd:
+        name: "homelab-{{ item.name }}.timer"
+        state: started
+        enabled: true
+        daemon_reload: "{{ services.changed or timers.changed }}"
+      loop: "{{ homelab_jobs }}"
+      loop_control:
+        label: "{{ item.name }}"

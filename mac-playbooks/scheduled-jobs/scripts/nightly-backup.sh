@@ -1,6 +1,7 @@
 #!/bin/bash
-# Nightly Mac backup, started by launchd (com.coletitze.nightly-backup) at 3:10 CT.
-# Runs after the cluster's own backups: nhl-odds dump 1:00, Grafana 1:30, kured reboots 2:00-2:55.
+# Nightly Mac backup, started by launchd (com.coletitze.nightly-backup) at 4:30 CT.
+# Copies the backup Pi's nhl-odds dumps and Grafana DBs (pulled off the cluster at 4:00) into iCloud,
+# checks them against the Pi's checksums and tells the Pi the copy is done, then backs up the Mac.
 set -uo pipefail
 
 # shellcheck source=common.sh

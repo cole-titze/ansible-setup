@@ -16,25 +16,26 @@
     launch_agents_dir: "{{ home }}/Library/LaunchAgents"
     # Times are the Mac's local time (America/Chicago).
     jobs:
-      # After the cluster's nhl-odds dump (1:00), Grafana backup (1:30) and kured reboots (2:00-2:55)
+      # Copies the backup Pi's nhl-odds dumps and Grafana DBs into iCloud after its 4:00 pull off the
+      # cluster, then backs up the Mac itself
       - name: nightly-backup
         label: com.coletitze.nightly-backup
         script: nightly-backup.sh
-        hour: 3
-        minute: 10
+        hour: 4
+        minute: 30
       # Warns if a backup didn't reach iCloud overnight, nightly-backup included
       - name: backup-stale-check
         label: com.coletitze.backup-stale-check
         script: backup-stale-check.sh
         hour: 9
         minute: 0
-      # Saturday, after the nightly backup: restores the newest iCloud copies to prove they work
+      # Saturday, after the nightly backup (4:30): restores the newest iCloud copies to prove they work
       - name: restore-drill
         label: com.coletitze.restore-drill
         script: restore-drill.sh
         weekday: 6
-        hour: 4
-        minute: 0
+        hour: 5
+        minute: 30
       # Sunday, after the load test (00:30), image rebuilds (~03:00), Trivy scan (~05:00) and
       # dependabot-merge (~09:00). launchd Weekday: 0 = Sunday.
       - name: weekly-upgrade

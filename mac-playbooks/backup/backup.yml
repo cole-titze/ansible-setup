@@ -15,6 +15,11 @@
   import_playbook: grafana/grafana-backup.yml
   tags: ['grafana']
 
+# Only reached when the nhl-odds and Grafana copies succeeded (a failed play stops the run)
+- name: Mark the iCloud copy done on the backup Pi.
+  import_playbook: offsite/mark-copied.yml
+  tags: ['nhl-odds', 'grafana']
+
 # Not using minecraft kubernetes yet
 # - name: Backup minecraft.
 #   import_playbook: minecraft/minecraft-backup.yml

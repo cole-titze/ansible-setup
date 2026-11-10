@@ -1,6 +1,6 @@
 #!/bin/bash
-# Weekly restore drill, started by launchd (com.coletitze.restore-drill) on Saturdays at 4:00 CT,
-# after the nightly backup (3:10). The drill itself is mac-playbooks/backup/restore-drill.yml:
+# Weekly restore drill, started by launchd (com.coletitze.restore-drill) on Saturdays at 5:30 CT,
+# after the nightly backup (4:30). The drill itself is mac-playbooks/backup/restore-drill.yml:
 # launchd's bash can't read iCloud Drive, Ansible's Python can. Notifies either way.
 set -uo pipefail
 

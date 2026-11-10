@@ -1,0 +1,15 @@
+---
+# Tells the backup Pi the nightly iCloud copy finished. Its 9:00 stale check
+# (backup-node-jobs.yml) posts to Discord if this hasn't happened for 2 days.
+- name: Mark the iCloud copy done on the backup Pi
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    # The offsite key's forced command on the Pi only allows rsync reads and this
+    - name: Write the Pi's last-copied marker
+      ansible.builtin.command:
+        argv: [ssh, -i, "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite", -o, BatchMode=yes,
+               -o, ConnectTimeout=10, pi@10.42.0.3, mark-copied]
+      changed_when: true

@@ -1,6 +1,7 @@
 ---
-# The backup Pi pulls the nightly nhl-odds dump off a worker at 4:00 and keeps 30 days,
-# so a copy survives losing the cluster. Workers only let its key read their dump dir.
+# The backup Pi pulls the nightly nhl-odds dump (keeps 30) and the Grafana DBs (keeps 35) off the
+# workers at 4:00, so a copy survives losing the cluster, and the Mac's nightly copy to iCloud reads
+# them from there (backup-node-jobs.yml). Workers only let its key read their backups dir.
 - name: Create the backup Pi's pull key
   hosts: backup_raspberrypi
   gather_facts: false
@@ -14,17 +15,18 @@
         comment: nhl-backup-pull@{{ inventory_hostname }}
       register: pull_key
 
-- name: Let the backup Pi read nhl-odds dumps on workers
+- name: Let the backup Pi read the backups on workers
   hosts: nodes
   gather_facts: false
   become: true
 
   tasks:
-    - name: Authorize the pull key, limited to read-only rsync of the dump dir
+    # Rooted at backups/, so the pull script asks for nhl-odds/<file> and grafana/
+    - name: Authorize the pull key, limited to read-only rsync of the backups dir
       ansible.posix.authorized_key:
         user: pi
         key: "{{ hostvars[groups['backup_raspberrypi'][0]].pull_key.public_key }}"
-        key_options: 'restrict,command="/usr/bin/rrsync -ro /home/pi/backups/nhl-odds"'
+        key_options: 'restrict,command="/usr/bin/rrsync -ro /home/pi/backups"'
 
 - name: Schedule the nightly pull on the backup Pi
   hosts: backup_raspberrypi
@@ -40,12 +42,14 @@
         owner: root
         group: root
 
-    - name: Ensure backup directory exists
+    - name: Ensure backup directories exist
       ansible.builtin.file:
-        path: /home/pi/backups/nhl-odds
+        path: "/home/pi/backups/{{ item }}"
         state: directory
         mode: "0755"
+      loop: [nhl-odds, grafana]
 
+    # Also pulls the Grafana DBs (1:30); the cron name is kept so the line is updated in place.
     # Dumps start at 1:00 and take ~25 min; worker updates/reboots run 1:15–1:45
     - name: Add nightly pull cron
       ansible.builtin.cron:

@@ -49,8 +49,8 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/u
 # Mac backups (no inventory flag needed)
 ansible-playbook mac-playbooks/backup/backup.yml
 
-# Install/refresh the Mac's launchd jobs (nightly backup 3:10, stale-backup check 9:00,
-# restore drill Sat 4:00, weekly upgrade Sun 10:00, alert agent every minute; reports go to Discord)
+# Install/refresh the Mac's launchd jobs (nightly backup 4:30, stale-backup check 9:00,
+# restore drill Sat 5:30, weekly upgrade Sun 10:00, alert agent every minute; reports go to Discord)
 ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
 
@@ -62,7 +62,7 @@ Defined in `inventories/inventory.ini`. Group variables in `inventories/group_va
 
 | Group | Host | IP | Purpose |
 |-------|------|----|---------|
-| `backup_raspberrypi` | `dockerpi_backup` | .3 | Backup Pi (Unbound, Pi-hole failover, off-cluster nhl-odds dumps) |
+| `backup_raspberrypi` | `dockerpi_backup` | .3 | Backup Pi (Unbound, Pi-hole failover, off-cluster nhl-odds + Grafana backups, backup stale check + restore drill) |
 | `control_plane` | `node01` | .20 | K3s master |
 | `nodes` | `node02–04` | .21–.22, .2 | K3s workers (node04 = old dockerpi, also primary Pi-hole on the host) |
 | `storage` | `node03` | .22 | Longhorn storage |
@@ -101,4 +101,8 @@ node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary
 
 ### Off-cluster DB copies
 
-`utilities/backup-node-db-pull.yml` (also imported by `setup/raspberry-pi-backup.yml`): `dockerpi_backup` pulls the day's nhl-odds dump from the first worker that has it at 4:00 into `/home/pi/backups/nhl-odds` (keeps 30; log `/var/log/nhl-backup-pull.log`). Its key is limited on workers to read-only `rrsync` of that dir.
+`utilities/backup-node-db-pull.yml` (also imported by `setup/raspberry-pi-backup.yml`): at 4:00 `dockerpi_backup` pulls the day's nhl-odds dump from the first worker that has it into `/home/pi/backups/nhl-odds` (keeps 30) and the Grafana DBs from every worker into `/home/pi/backups/grafana` (keeps 35), and writes a `SHA256SUMS` in each (log `/var/log/nhl-backup-pull.log`). Its key is limited on workers to read-only `rrsync` of `/home/pi/backups`.
+
+The Mac's nightly backup (4:30) copies those folders into iCloud through a non-iCloud staging dir, checks the new iCloud copies against `SHA256SUMS`, then runs `mark-copied` on the Pi. Its key (`~/.ssh/backuppi_offsite`) is limited on the Pi to read-only `rrsync` of `/home/pi/backups` plus `mark-copied` (`homelab-offsite-access`), which writes `/var/lib/homelab/mac-last-copied`.
+
+`utilities/backup-node-jobs.yml`: the backup Pi's systemd timers (moving the Mac's launchd jobs there, #24). `homelab-backup-stale-check` (9:00) posts to Discord if the newest dump or Grafana DB on the Pi is over 26h old, or the Mac's copy is over 48h old. `homelab-restore-drill` (Sat 5:00) restores the newest dump into a throwaway PostgreSQL 18 (PGDG packages, server disabled, socket-only scratch cluster in `/var/tmp/restore-drill`) and checks the newest Grafana DB. Scripts in `utilities/files/homelab/`, logs in `/var/log/homelab/`, Discord webhook in root-only `/etc/homelab/discord-webhook` (from `alerting_vars.yml`; re-run the playbook after changing it). Run one now: `sudo systemctl start homelab-<job>.service`.

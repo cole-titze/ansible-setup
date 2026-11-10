@@ -1,15 +1,19 @@
 ---
-# Dumps are ~2.4 GB and growing (goal replays, shift charts, API responses). Downloading straight
-# into iCloud Drive made iCloud upload while the fetch ran, choking the transfer to ~1.5 MB/s.
-# So: fetch only new dumps into a non-iCloud staging dir, then copy them into iCloud after.
+# Copies the backup Pi's nhl-odds dumps (pulled off the cluster at 4:00, backup-node-db-pull.yml)
+# into iCloud. Dumps are ~2.4 GB and growing; downloading straight into iCloud Drive made iCloud
+# upload while the transfer ran, choking it to ~1.5 MB/s. So: rsync only new dumps into a non-iCloud
+# staging dir, then copy them into iCloud after, and check each new iCloud copy against the Pi's
+# SHA256SUMS. The Mac's offsite key can only read the Pi's backups dir (backup-node-jobs.yml).
 - name: Backup NHL Odds database
-  hosts: node03
+  hosts: localhost
+  connection: local
   gather_facts: false
 
   vars:
+    backup_pi: pi@10.42.0.3
+    offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
     staging_backup_dir: "{{ lookup('env', 'HOME') }}/source/backups/nhl-odds/"
     icloud_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
-    remote_backup_dir: /home/pi/backups/nhl-odds/
     staging_keep: 15
     # iCloud keeps the newest 7 dumps plus the newest dump of each of the 4 weeks before them,
     # so about a month of history in 11 files (~2.4 GB each)
@@ -17,8 +21,10 @@
     icloud_weekly_keep: 4
     # Only nightly dumps; older hand-named files (nhl-20260415.dump, *-pre-repair) sort wrong and are left alone
     dump_pattern: "nhl-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].dump"
-    # Ansible's default ssh_args include -C; dumps are already compressed, so skip it
-    ansible_ssh_args: -o ControlMaster=auto -o ControlPersist=60s
+    dump_regex: '^nhl-\d{4}-\d{2}-\d{2}\.dump$'
+    # /usr/bin/rsync and ssh: under launchd, macOS Local Network privacy only lets Apple's binaries
+    # reach 10.42.0.x
+    rsync_ssh: "ssh -i {{ offsite_key }} -o BatchMode=yes -o ConnectTimeout=10"
 
   tasks:
     - name: Ensure local backup directories exist
@@ -29,35 +35,19 @@
       loop:
         - "{{ staging_backup_dir }}"
         - "{{ icloud_backup_dir }}"
-      delegate_to: localhost
-      run_once: true
 
-    - name: Get list of backup files on node
-      ansible.builtin.find:
-        paths: "{{ remote_backup_dir }}"
-        patterns: "{{ dump_pattern }}"
-        file_type: file
-      register: backup_files
+    # Lists every finished dump on the Pi (partial transfers there never get a line)
+    - name: Get the Pi's SHA256SUMS
+      ansible.builtin.command:
+        argv: [/usr/bin/rsync, -t, -e, "{{ rsync_ssh }}", "{{ backup_pi }}:nhl-odds/SHA256SUMS", "{{ staging_backup_dir }}"]
+      changed_when: false
 
-    - name: Get list of backup files already staged
-      ansible.builtin.find:
-        paths: "{{ staging_backup_dir }}"
-        patterns: "{{ dump_pattern }}"
-        file_type: file
-      register: staged_backups
-      delegate_to: localhost
-
-    # Skipping files already staged (same name and size, so a partial fetch is retried) avoids
-    # fetch checksumming every multi-GB dump on both ends
-    - name: Fetch new backup files to staging
-      ansible.builtin.fetch:
-        src: "{{ remote_backup_dir }}{{ item.split(':')[0] }}"
-        dest: "{{ staging_backup_dir }}"
-        flat: true
-      loop: "{{ remote_keys | difference(staged_keys) | sort }}"
-      vars:
-        remote_keys: "{{ backup_files.files | map(attribute='path') | map('basename') | zip(backup_files.files | map(attribute='size')) | map('join', ':') | list }}"
-        staged_keys: "{{ staged_backups.files | map(attribute='path') | map('basename') | zip(staged_backups.files | map(attribute='size')) | map('join', ':') | list }}"
+    - name: Read the Pi's checksums
+      ansible.builtin.set_fact:
+        pi_sums: >-
+          {{ dict(lookup('file', staging_backup_dir + 'SHA256SUMS').splitlines()
+                  | map('split') | map('reverse')
+                  | selectattr('0', 'match', dump_regex) | list) }}
 
     - name: Find staged backups
       ansible.builtin.find:
@@ -65,8 +55,30 @@
         patterns: "{{ dump_pattern }}"
         file_type: file
       register: staged_backups
-      delegate_to: localhost
-      run_once: true
+
+    # Only the newest dumps go to iCloud as dailies; older ones are already there or not needed.
+    # --partial-dir keeps an interrupted transfer out of the final name, so a staged name is whole.
+    - name: Pull new dumps from the backup Pi to staging
+      ansible.builtin.command:
+        argv: [/usr/bin/rsync, -t, --partial-dir=.rsync-partial, -e, "{{ rsync_ssh }}",
+               "{{ backup_pi }}:nhl-odds/{{ item }}", "{{ staging_backup_dir }}"]
+      loop: "{{ (pi_sums.keys() | sort(reverse=true))[:icloud_daily_keep]
+                | difference(staged_backups.files | map(attribute='path') | map('basename')) | sort }}"
+      register: pulled
+
+    - name: Check the pulled dumps against the Pi's checksums
+      ansible.builtin.shell: |
+        set -o pipefail
+        cd "{{ staging_backup_dir }}" && grep -E '  ({{ pulled.results | map(attribute='item') | map('regex_escape') | join('|') }})$' SHA256SUMS | shasum -a 256 -c
+      when: pulled.results | length > 0
+      changed_when: false
+
+    - name: Find staged backups
+      ansible.builtin.find:
+        paths: "{{ staging_backup_dir }}"
+        patterns: "{{ dump_pattern }}"
+        file_type: file
+      register: staged_backups
 
     - name: Remove all but the newest staged backups (names are dated)
       ansible.builtin.file:
@@ -75,8 +87,6 @@
       loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[staging_keep:] }}"
       loop_control:
         label: "{{ item.path | basename }}"
-      delegate_to: localhost
-      run_once: true
 
     # force: false skips dumps already in iCloud without checksumming them
     - name: Copy the newest backups into iCloud
@@ -88,8 +98,32 @@
       loop: "{{ (staged_backups.files | sort(attribute='path', reverse=true))[:icloud_daily_keep] }}"
       loop_control:
         label: "{{ item.path | basename }}"
-      delegate_to: localhost
-      run_once: true
+      register: icloud_copies
+
+    - name: Checksum the new iCloud copies
+      ansible.builtin.stat:
+        path: "{{ icloud_backup_dir }}{{ item.item.path | basename }}"
+        checksum_algorithm: sha256
+      loop: "{{ icloud_copies.results | selectattr('changed') | list }}"
+      loop_control:
+        label: "{{ item.item.path | basename }}"
+      register: icloud_sums
+
+    - name: Fail if an iCloud copy doesn't match the Pi
+      ansible.builtin.fail:
+        msg: "CHECKSUM MISMATCH: {{ bad | join(', ') }}"
+      vars:
+        # A dump staged before the Pi's SHA256SUMS listed it has nothing to compare against
+        bad: >-
+          {%- set ns = namespace(out=[]) -%}
+          {%- for r in icloud_sums.results -%}
+            {%- set name = r.item.item.path | basename -%}
+            {%- if name in pi_sums and r.stat.checksum | default('') != pi_sums[name] -%}
+              {%- set ns.out = ns.out + [name] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.out }}
+      when: bad | length > 0
 
     - name: Find iCloud backups
       ansible.builtin.find:
@@ -97,8 +131,6 @@
         patterns: "{{ dump_pattern }}"
         file_type: file
       register: icloud_backups
-      delegate_to: localhost
-      run_once: true
 
     # Names are dated, so newest first by name. Past the daily ones, keep the first (newest) dump
     # seen for each ISO week until icloud_weekly_keep weeks are kept.
@@ -117,8 +149,6 @@
             {%- endif -%}
           {%- endfor -%}
           {{ ns.keep }}
-      delegate_to: localhost
-      run_once: true
 
     - name: Remove the other iCloud backups
       ansible.builtin.file:
@@ -127,5 +157,3 @@
       loop: "{{ icloud_backups.files | rejectattr('path', 'in', icloud_kept) | list }}"
       loop_control:
         label: "{{ item.path | basename }}"
-      delegate_to: localhost
-      run_once: true

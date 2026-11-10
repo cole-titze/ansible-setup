@@ -1,45 +1,95 @@
 ---
-# grafana-db-backup CronJob (kubernetes/prometheus/prometheus.yml) writes to whichever worker
-# runs Grafana, so pull from every worker that has the folder. Restore: scale Grafana to 0, copy a
-# grafana-*.db into the cluster-monitoring-grafana volume as grafana.db (owned 472:472), scale back to 1.
+# Copies the backup Pi's Grafana DBs (pulled off the workers at 4:00, backup-node-db-pull.yml) into
+# iCloud, through a non-iCloud staging dir, and checks each new iCloud copy against the Pi's
+# SHA256SUMS. The grafana-db-backup CronJob (kubernetes/prometheus/prometheus.yml) writes them at 1:30.
+# Restore: scale Grafana to 0, copy a grafana-*.db into the cluster-monitoring-grafana volume as
+# grafana.db (owned 472:472), scale back to 1.
 - name: Backup Grafana database
-  hosts: nodes
+  hosts: localhost
+  connection: local
   gather_facts: false
 
   vars:
+    backup_pi: pi@10.42.0.3
+    offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
+    staging_backup_dir: "{{ lookup('env', 'HOME') }}/source/backups/grafana/"
     local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/grafana/"
-    remote_backup_dir: /home/pi/backups/grafana/
+    # Same as the Pi keeps, so a deleted file is never one the next run would copy again
     local_keep: 35
+    # /usr/bin/rsync and ssh: under launchd, macOS Local Network privacy only lets Apple's binaries
+    # reach 10.42.0.x
+    rsync_ssh: "ssh -i {{ offsite_key }} -o BatchMode=yes -o ConnectTimeout=10"
 
   tasks:
-    - name: Ensure local backup directory exists
+    - name: Ensure local backup directories exist
       ansible.builtin.file:
-        path: "{{ local_backup_dir }}"
+        path: "{{ item }}"
         state: directory
         mode: "0755"
-      delegate_to: localhost
-      run_once: true
+      loop:
+        - "{{ staging_backup_dir }}"
+        - "{{ local_backup_dir }}"
 
-    # A worker that has never run the CronJob has no folder; skip it instead of warning
-    - name: Check for the backup folder on node
-      ansible.builtin.stat:
-        path: "{{ remote_backup_dir }}"
-      register: backup_dir
+    # Small files, so mirror the Pi's folder (--delete drops ones the Pi has aged out)
+    - name: Pull the Grafana DBs from the backup Pi to staging
+      ansible.builtin.command:
+        argv: [/usr/bin/rsync, -t, --delete, --partial-dir=.rsync-partial,
+               "--include=grafana-*.db", --include=SHA256SUMS, "--exclude=*",
+               -e, "{{ rsync_ssh }}", "{{ backup_pi }}:grafana/", "{{ staging_backup_dir }}"]
+      changed_when: false
 
-    - name: Get list of backup files on node
-      when: backup_dir.stat.isdir | default(false)
+    - name: Check the staged DBs against the Pi's checksums
+      ansible.builtin.command: shasum -a 256 -c --quiet SHA256SUMS
+      args:
+        chdir: "{{ staging_backup_dir }}"
+      changed_when: false
+
+    - name: Read the Pi's checksums
+      ansible.builtin.set_fact:
+        pi_sums: "{{ dict(lookup('file', staging_backup_dir + 'SHA256SUMS').splitlines() | map('split') | map('reverse') | list) }}"
+
+    - name: Find staged Grafana backups
       ansible.builtin.find:
-        paths: "{{ remote_backup_dir }}"
+        paths: "{{ staging_backup_dir }}"
         patterns: "grafana-*.db"
         file_type: file
-      register: backup_files
+      register: staged_backups
 
-    - name: Fetch backup files to local machine
-      ansible.builtin.fetch:
+    # force: false skips DBs already in iCloud without checksumming them
+    - name: Copy new Grafana backups into iCloud
+      ansible.builtin.copy:
         src: "{{ item.path }}"
         dest: "{{ local_backup_dir }}"
-        flat: true
-      loop: "{{ backup_files.files | default([]) }}"
+        force: false
+        mode: "0644"
+      loop: "{{ staged_backups.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      register: icloud_copies
+
+    - name: Checksum the new iCloud copies
+      ansible.builtin.stat:
+        path: "{{ local_backup_dir }}{{ item.item.path | basename }}"
+        checksum_algorithm: sha256
+      loop: "{{ icloud_copies.results | selectattr('changed') | list }}"
+      loop_control:
+        label: "{{ item.item.path | basename }}"
+      register: icloud_sums
+
+    - name: Fail if an iCloud copy doesn't match the Pi
+      ansible.builtin.fail:
+        msg: "CHECKSUM MISMATCH: {{ bad | join(', ') }}"
+      vars:
+        bad: >-
+          {%- set ns = namespace(out=[]) -%}
+          {%- for r in icloud_sums.results -%}
+            {%- set name = r.item.item.path | basename -%}
+            {%- if r.stat.checksum | default('') != pi_sums.get(name) -%}
+              {%- set ns.out = ns.out + [name] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.out }}
+      when: bad | length > 0
 
     - name: Find local Grafana backups
       ansible.builtin.find:
@@ -47,11 +97,8 @@
         patterns: "grafana-*.db"
         file_type: file
       register: local_backups
-      delegate_to: localhost
-      run_once: true
 
-    # Names are dated, so newest first by name. Keep more than the node's 30 days so a deleted
-    # file is never one the next run would fetch again.
+    # Names are dated, so newest first by name
     - name: Remove all but the newest local Grafana backups
       ansible.builtin.file:
         path: "{{ item.path }}"
@@ -59,5 +106,3 @@
       loop: "{{ (local_backups.files | sort(attribute='path', reverse=true))[local_keep:] }}"
       loop_control:
         label: "{{ item.path | basename }}"
-      delegate_to: localhost
-      run_once: true

@@ -125,3 +125,5 @@
   import_playbook: ../utilities/backup-node-ssd.yml
 - name: Run node exporter for the cluster's Prometheus
   import_playbook: ../utilities/backup-node-exporter.yml
+- name: Backup stale check, restore drill and the Mac's offsite copy access
+  import_playbook: ../utilities/backup-node-jobs.yml
