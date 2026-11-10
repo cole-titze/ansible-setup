@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "disableBypassPermissionsMode": "disable",
+    "allow": [
+      "Bash(homelab-run * --check --diff)",
+      "Bash(homelab-run * --check)",
+      "Bash(kubectl get:*)",
+      "Bash(kubectl describe:*)",
+      "Bash(kubectl logs:*)",
+      "Bash(kubectl top:*)",
+      "Bash(kubectl events:*)",
+      "Bash(kubectl rollout status:*)",
+      "Bash(kubectl rollout history:*)",
+      "Bash(homelab-node:*)",
+      "Bash(journalctl:*)",
+      "Bash(systemctl status:*)",
+      "Bash(systemctl list-timers:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull --ff-only:*)"
+    ],
+    "deny": [
+      "Bash(*reset-kubernetes.yml*)",
+      "Bash(*uninstall-kubernetes.yml*)",
+      "Bash(kubectl delete:*)",
+      "Bash(helm uninstall:*)",
+      "Bash(rm -rf:*)",
+      "Bash(*vault-pass*)",
+      "Bash(*ansible-vault*)",
+      "Read(~/.config/homelab/**)",
+      "Read(//etc/homelab/**)",
+      "Edit(~/source/ansible-files/**)",
+      "Edit(~/.config/homelab/**)"
+    ]
+  }
+}

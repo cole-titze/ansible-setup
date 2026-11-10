@@ -185,3 +185,29 @@ Follow [`mac-playbooks/macbook-setup.md`](mac-playbooks/macbook-setup.md). Its *
 ```bash
 ansible-playbook mac-playbooks/backup/backup.yml
 ```
+
+The nightly backup (launchd, 4:30) copies the backup Pi's nhl-odds dumps and Grafana DBs into iCloud and backs up the Mac's `~/.ssh`, `~/.kube` and `~/.claude`. Launchd jobs only run while someone is logged in: after a reboot, nothing runs until you log in. The backup Pi's 9:00 stale check posts to Discord if the Mac hasn't copied for 2 days.
+
+### Backup Pi jobs and Remote Control
+
+The backup Pi (`dockerpi_backup`) runs the homelab's scheduled jobs and a Claude Code Remote Control session, so day-to-day running doesn't need the Mac:
+
+```bash
+# Backup stale check (9:00), restore drill (Sat 5:00), the Mac's offsite-copy key
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-jobs.yml
+# Alert agent (every minute)
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-alert-agent.yml
+# Remote Control (claude-rc.service)
+ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-remote-control.yml
+```
+
+Re-run the jobs and Remote Control playbooks after changing the vars in `~/source/ansible-files/vars`: they copy the Discord webhook, the vaulted vars and the vault password to the Pi.
+
+Two logins, both done once by hand as `pi` on the Pi (`ssh -i ~/.ssh/dockerpibackup pi@10.42.0.3`):
+
+1. **Alert agent:** `claude setup-token` (a one-year, inference-only token). Put the token in `/etc/homelab/claude-oauth-token` (root, 0600), then re-run the alert agent playbook to start its timer.
+2. **Remote Control:** `claude auth login` (Remote Control needs a full login; use a claude.ai account with two-factor login on, since it can drive the homelab). Run `claude` once in `~/source/repos/ansible-setup` to accept the folder trust prompt, then re-run the Remote Control playbook to start `claude-rc.service`.
+
+Then open the Claude app (or claude.ai/code): the session is named **backup-pi**. Every command that isn't on the allow list in `utilities/files/homelab/claude-rc-settings.json` asks for approval in the app; resets, uninstalls, `kubectl delete` and the secrets are denied. Playbooks run through `homelab-run <playbook> [options]`, one at a time, logged to `/var/log/homelab/runs/`.
+
+The Pi's checkout follows GitHub, so push changes made on the Mac before running them from the Pi (`git pull --ff-only` in the session).

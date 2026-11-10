@@ -1,0 +1,183 @@
+---
+# Claude Code Remote Control on the backup Pi (ansible-setup #24): drive Claude from the Claude app
+# to run playbooks without the Mac. claude-rc.service runs `claude remote-control` as pi in
+# ~pi/source/repos/ansible-setup. It connects outbound only, so the Pi's firewall is unchanged.
+# Sets up for pi: Ansible, ssh access to every inventory host (the inventory's ~/.ssh/<host> names
+# point at pi's homelab_nodes key, from backup-node-alert-agent.yml), the vaulted vars and the vault
+# password (copied from the Mac; re-run after changing them), the roles, and homelab-run.
+# Permissions: /etc/homelab/claude-rc-settings.json (root-owned, so sessions can't change it):
+# default mode, so anything not on its allow list asks in the app; resets, deletes and secrets denied.
+# Login: `claude auth login` as pi, by hand (setup-token isn't enough for Remote Control); the
+# service is only enabled once ~pi/.claude/.credentials.json exists.
+- name: Let pi on the backup Pi reach the backup Pi and the PiKVM
+  hosts: backup_raspberrypi:pikvms
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Read pi's node key on the backup Pi
+      ansible.builtin.slurp:
+        src: /home/pi/.ssh/homelab_nodes.pub
+      register: nodes_pub
+      delegate_to: "{{ groups['backup_raspberrypi'][0] }}"
+      run_once: true
+
+    # The backup Pi's own playbooks connect to 10.42.0.3 over ssh too
+    - name: Authorize pi's node key
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user | default('pi') }}"
+        key: "{{ nodes_pub.content | b64decode }}"
+
+- name: Remote Control on the backup Pi
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  vars:
+    mac_home: "{{ lookup('env', 'HOME') }}"
+    ansible_files: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or mac_home + '/source/ansible-files' }}"
+    repo_dir: /home/pi/source/repos/ansible-setup
+    # The inventory's ssh key file names, all pi's node key on the Pi
+    inventory_keys: [node01, node02, node03, node04, dockerpibackup, pikvm]
+
+  tasks:
+    # ---- Ansible -----------------------------------------------------------------------------
+    # Debian's ansible package includes the collections the playbooks use (community.crypto,
+    # kubernetes.core, ansible.posix, community.general)
+    - name: Install Ansible and the Kubernetes Python client
+      ansible.builtin.apt:
+        name: [ansible, python3-kubernetes, python3-jmespath]
+        state: present
+
+    - name: Copy the roles (requirements.yml pulls them over ssh from private repos)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../roles/{{ item }}"
+        dest: "{{ repo_dir }}/roles/"
+        owner: pi
+        group: pi
+        mode: preserve
+      loop: [docker, nfs, raspberry-pi, wol]
+
+    # ---- ssh ---------------------------------------------------------------------------------
+    - name: Point the inventory's key names at pi's node key
+      ansible.builtin.file:
+        src: /home/pi/.ssh/homelab_nodes
+        dest: "/home/pi/.ssh/{{ item }}"
+        state: link
+        owner: pi
+        group: pi
+        force: true
+      loop: "{{ inventory_keys }}"
+
+    - name: Scan the inventory hosts' ssh keys
+      ansible.builtin.command: "ssh-keyscan -T 5 -t ed25519 {{ item }}"
+      loop: "{{ groups['raspberrypis'] | map('extract', hostvars, 'ansible_host') | unique | list }}"
+      register: host_keys
+      changed_when: false
+
+    - name: Add them to pi's known_hosts
+      ansible.builtin.known_hosts:
+        path: /home/pi/.ssh/known_hosts
+        name: "{{ item.item }}"
+        key: "{{ item.stdout_lines | select('match', '^[^#]') | first }}"
+      loop: "{{ host_keys.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      become_user: pi
+      become: true
+
+    # ---- Secrets -----------------------------------------------------------------------------
+    - name: Make pi's secrets folders
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: pi
+        group: pi
+        mode: "0700"
+      loop: [/home/pi/source/ansible-files, /home/pi/source/ansible-files/vars, /home/pi/.config/homelab]
+
+    # Still vaulted; same place as on the Mac, so the playbooks find them without ANSIBLE_FILES_PATH
+    - name: Copy the vaulted vars files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /home/pi/source/ansible-files/vars/
+        owner: pi
+        group: pi
+        mode: "0600"
+        decrypt: false
+      with_fileglob: "{{ ansible_files }}/vars/*.yml"
+
+    - name: Write the vault password (vault-pass.sh reads it on Linux)
+      ansible.builtin.copy:
+        content: "{{ lookup('pipe', mac_home + '/source/repos/ansible-setup/vault-pass.sh') }}\n"
+        dest: /home/pi/.config/homelab/vault-pass
+        owner: pi
+        group: pi
+        mode: "0600"
+      no_log: true
+
+    # ---- homelab-run, settings, service ------------------------------------------------------
+    - name: Make the run log folder
+      ansible.builtin.file:
+        path: /var/log/homelab/runs
+        state: directory
+        owner: pi
+        group: pi
+        mode: "0755"
+
+    - name: Install homelab-run and the Remote Control settings
+      ansible.builtin.copy:
+        src: "files/homelab/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { src: homelab-run.sh, dest: /usr/local/bin/homelab-run, mode: "0755" }
+        - { src: claude-rc-settings.json, dest: /etc/homelab-claude-rc-settings.json, mode: "0644" }
+      loop_control:
+        label: "{{ item.dest }}"
+      register: rc_files
+
+    - name: Write the Remote Control service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/claude-rc.service
+        content: |
+          [Unit]
+          Description=Claude Code Remote Control for the homelab (ansible-setup checkout)
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=pi
+          WorkingDirectory={{ repo_dir }}
+          Environment=PATH=/home/pi/.local/bin:/usr/local/bin:/usr/bin:/bin
+          Environment=KUBECONFIG=/home/pi/.kube/config
+          ExecStart=/home/pi/.local/bin/claude remote-control --name backup-pi --permission-mode default --settings /etc/homelab-claude-rc-settings.json
+          Restart=always
+          RestartSec=30
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: "0644"
+      register: rc_service
+
+    - name: Check for pi's Claude login
+      ansible.builtin.stat:
+        path: /home/pi/.claude/.credentials.json
+      register: rc_login
+
+    - name: Enable Remote Control
+      ansible.builtin.systemd:
+        name: claude-rc.service
+        state: "{{ 'restarted' if (rc_files.changed or rc_service.changed) else 'started' }}"
+        enabled: true
+        daemon_reload: "{{ rc_service.changed }}"
+      when: rc_login.stat.exists
+
+    - name: Say Remote Control waits for the login
+      ansible.builtin.debug:
+        msg: "Not enabled: run `claude auth login` as pi on the backup Pi, then re-run."
+      when: not rc_login.stat.exists
