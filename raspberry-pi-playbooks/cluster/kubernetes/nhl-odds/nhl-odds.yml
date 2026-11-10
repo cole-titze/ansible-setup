@@ -441,6 +441,15 @@
         psql -U postgres -d nhl -v ON_ERROR_STOP=1 -c 'GRANT INSERT, UPDATE ON "JobStatus" TO nhl_web'
       changed_when: false
 
+    # Browser error reports (POST /api/ClientError) are saved to ErrorLog by the web API
+    - name: Let nhl_web save browser error reports
+      ansible.builtin.shell: >
+        kubectl exec -n nhl-odds {{ db_pod_name.stdout }} --
+        psql -U postgres -d nhl -v ON_ERROR_STOP=1
+        -c 'GRANT INSERT ON "ErrorLog" TO nhl_web'
+        -c 'GRANT USAGE ON SEQUENCE "ErrorLog_Id_seq" TO nhl_web'
+      changed_when: false
+
     - name: Wait for Elasticsearch
       ansible.builtin.command: kubectl rollout status statefulset/nhl-odds-elasticsearch -n nhl-odds --timeout=600s
       changed_when: false
