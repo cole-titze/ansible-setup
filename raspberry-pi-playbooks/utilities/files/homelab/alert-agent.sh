@@ -10,7 +10,7 @@
 # - One session per poll for all new alerts (one incident often fires several).
 # - An alert counts once (fingerprint + start time), so the 12h Discord repeats don't re-run it;
 #   the same alertname waits COOLDOWN after a run; at most DAILY_CAP sessions a day.
-# - New alerts wait during the Mac's weekly upgrade (Sun 10:00-14:00; its upgrades fire alerts).
+# - New alerts wait while the weekly upgrade runs (its upgrades fire alerts).
 # - systemd doesn't start the job again while it's still running, so sessions never overlap.
 # - First run only records what's already firing.
 set -uo pipefail
@@ -70,9 +70,8 @@ print(sum(a["labels"].get("alertname") == "Watchdog" for a in alerts))' 2>>"$POL
 [ "$watchdog" -gt 0 ] || alerting_down "Prometheus's Watchdog alert is missing (Prometheus down or not sending)"
 alerting_up
 
-# The weekly upgrade still runs on the Mac (Sun 10:00, done by ~12:00), so go by the clock
 weekly_running=0
-[ "$(date +%u)" = 7 ] && [ "$(date +%-H)" -ge 10 ] && [ "$(date +%-H)" -lt 14 ] && weekly_running=1
+systemctl is-active --quiet homelab-weekly-upgrade.service && weekly_running=1
 
 # Prints the alert text for the prompt if a session should run; updates the state files.
 # Exit 0 = run, 3 = nothing new, 4 = deferred (weekly), 5 = cap reached (first time today)

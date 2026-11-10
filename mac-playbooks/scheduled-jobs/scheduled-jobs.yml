@@ -36,18 +36,9 @@
         weekday: 6
         hour: 5
         minute: 30
-      # Sunday, after the load test (00:30), image rebuilds (~03:00), Trivy scan (~05:00) and
-      # dependabot-merge (~09:00). launchd Weekday: 0 = Sunday.
-      - name: weekly-upgrade
-        label: com.coletitze.weekly-upgrade
-        script: weekly-upgrade.sh
-        weekday: 0
-        hour: 10
-        minute: 0
-        # Background throttles the job's network I/O; its long API streams stalled mid-run
-        process_type: Standard
-      # alert-agent moved to the backup Pi (utilities/backup-node-alert-agent.yml). Removing a job here
-      # doesn't unload it: launchctl bootout gui/$(id -u)/com.coletitze.alert-agent and rm its plist.
+      # alert-agent and weekly-upgrade moved to the backup Pi (utilities/backup-node-alert-agent.yml,
+      # backup-node-weekly-upgrade.yml). Removing a job here doesn't unload it:
+      # launchctl bootout gui/$(id -u)/<label> and rm its plist.
       # At login: start Ollama (nhl-odds assistant) and a Terminal running `claude rc`
       - name: login-apps
         label: com.coletitze.login-apps

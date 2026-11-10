@@ -1,0 +1,172 @@
+---
+# The weekly upgrade on the backup Pi (ansible-setup #24; moved from the Mac's launchd job).
+# homelab-weekly-upgrade.timer (Sun 10:00 CT) runs headless Claude Code as pi with
+# weekly-upgrade-prompt.md: check the Sunday jobs and uptime blips, /k8s-major-upgrade, and the
+# nhl-odds security pass (app changes go through PRs and CI; the Pi has no .NET/Node/Docker).
+# /update-mac isn't part of it any more (run it by hand on the Mac). Posts the summary to Discord.
+# Needs, from the other backup-node-*.yml playbooks: the claude CLI and token (alert agent), kubectl,
+# ssh keys, Ansible and homelab-run (Remote Control). gh is logged in as pi by hand (`gh auth login
+# --web --scopes workflow`, then `gh auth setup-git`); the repos below are cloned with it.
+- name: Weekly upgrade on the backup Pi
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  vars:
+    mac_home: "{{ lookup('env', 'HOME') }}"
+    repos_dir: /home/pi/source/repos
+    repos: [ansible-setup, nhl-odds, retirement-calculator, containers, claude-skills]
+
+  tasks:
+    - name: Install gh
+      ansible.builtin.apt:
+        name: gh
+        state: present
+
+    - name: Check gh is logged in for pi
+      ansible.builtin.command: gh auth status
+      become_user: pi
+      changed_when: false
+      register: gh_status
+      failed_when: false
+
+    - name: Stop if gh isn't logged in
+      ansible.builtin.fail:
+        msg: "Log gh in as pi first: gh auth login --hostname github.com --git-protocol https --web --scopes workflow && gh auth setup-git"
+      when: gh_status.rc != 0
+
+    # Same name and email as the Mac's commits
+    - name: Set pi's git identity
+      community.general.git_config:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        scope: global
+      loop:
+        - { name: user.name, value: "{{ lookup('pipe', 'git config --global user.name') }}" }
+        - { name: user.email, value: "{{ lookup('pipe', 'git config --global user.email') }}" }
+        - { name: pull.ff, value: only }
+      loop_control:
+        label: "{{ item.name }}"
+      become_user: pi
+
+    # The alert agent's playbook makes shallow clones of ansible-setup and nhl-odds; the weekly run
+    # commits and pushes, so give it full history
+    - name: Unshallow existing clones
+      ansible.builtin.command: git fetch --quiet --unshallow
+      args:
+        chdir: "{{ repos_dir }}/{{ item }}"
+        removes: "{{ repos_dir }}/{{ item }}/.git/shallow"
+      loop: "{{ repos }}"
+      become_user: pi
+
+    - name: Clone the repos (through gh's git credentials)
+      ansible.builtin.git:
+        repo: "https://github.com/cole-titze/{{ item }}.git"
+        dest: "{{ repos_dir }}/{{ item }}"
+        update: false
+      loop: "{{ repos }}"
+      become_user: pi
+
+    # Same layout as the Mac: ~/.claude/skills/<name> -> the claude-skills repo
+    - name: Find the skills in claude-skills
+      ansible.builtin.find:
+        paths: "{{ repos_dir }}/claude-skills"
+        patterns: SKILL.md
+        recurse: true
+        depth: 2
+      register: skill_files
+
+    - name: Make pi's skills folder
+      ansible.builtin.file:
+        path: /home/pi/.claude/skills
+        state: directory
+        owner: pi
+        group: pi
+        mode: "0755"
+
+    - name: Link each skill
+      ansible.builtin.file:
+        src: "{{ item.path | dirname }}"
+        dest: "/home/pi/.claude/skills/{{ item.path | dirname | basename }}"
+        state: link
+        owner: pi
+        group: pi
+      loop: "{{ skill_files.files }}"
+      loop_control:
+        label: "{{ item.path | dirname | basename }}"
+
+    # The weekly run's uptime-blip history, started on the Mac
+    - name: Make pi's homelab folder
+      ansible.builtin.file:
+        path: /home/pi/homelab
+        state: directory
+        owner: pi
+        group: pi
+        mode: "0755"
+
+    - name: Copy the uptime-blip history from the Mac (once)
+      ansible.builtin.copy:
+        src: "{{ mac_home }}/Library/Logs/homelab/uptime-blips.csv"
+        dest: /home/pi/homelab/uptime-blips.csv
+        owner: pi
+        group: pi
+        mode: "0644"
+        force: false
+
+    - name: Install the weekly upgrade script and prompt
+      ansible.builtin.copy:
+        src: "files/homelab/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { src: weekly-upgrade.sh, dest: /usr/local/bin/homelab-weekly-upgrade, mode: "0755" }
+        - { src: weekly-upgrade-prompt.md, dest: /usr/local/lib/homelab/weekly-upgrade-prompt.md, mode: "0644" }
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Write the weekly upgrade service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-weekly-upgrade.service
+        content: |
+          [Unit]
+          Description=Weekly homelab upgrade and nhl-odds security pass (headless Claude Code)
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/homelab-weekly-upgrade
+          TimeoutStartSec=12h
+        owner: root
+        group: root
+        mode: "0644"
+      register: service
+
+    # After the load test (00:30), image rebuilds (~03:00), Trivy scan (~05:00) and dependabot-merge
+    # (~09:00). Persistent: a run missed while the Pi was off happens at boot.
+    - name: Write the weekly upgrade timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-weekly-upgrade.timer
+        content: |
+          [Unit]
+          Description=Weekly homelab upgrade (schedule)
+
+          [Timer]
+          OnCalendar=Sun *-*-* 10:00:00
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+        owner: root
+        group: root
+        mode: "0644"
+      register: timer
+
+    - name: Enable the weekly upgrade timer
+      ansible.builtin.systemd:
+        name: homelab-weekly-upgrade.timer
+        state: started
+        enabled: true
+        daemon_reload: "{{ service.changed or timer.changed }}"
