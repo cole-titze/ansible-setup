@@ -29,18 +29,18 @@
     # different timestamps (and two backup directories) a second apart within one run.
     - name: Pin the backup timestamp for this run
       ansible.builtin.set_fact:
-        icloud_backup_dir: "{{ icloud_base_dir }}/backup_{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
+        macbook_backup_dir: "{{ icloud_base_dir }}/backup_{{ lookup('pipe', 'date +%Y-%m-%d_%H-%M-%S') }}"
 
     - name: Ensure iCloud backup directory exists
       ansible.builtin.file:
-        path: "{{ icloud_backup_dir }}"
+        path: "{{ macbook_backup_dir }}"
         state: directory
         mode: "0755"
 
     - name: Sync macOS folders to iCloud backup with renamed dirs
       ansible.posix.synchronize:
         src: "{{ item.src }}/"
-        dest: "{{ icloud_backup_dir }}/{{ item.dest }}/"
+        dest: "{{ macbook_backup_dir }}/{{ item.dest }}/"
         archive: true
         recursive: true
         rsync_opts: "{{ common_rsync_opts + (item.filters | default([])) }}"
@@ -55,7 +55,7 @@
 
     - name: Print backup location
       ansible.builtin.debug:
-        msg: "Backup completed! File saved as: {{ icloud_backup_dir }}"
+        msg: "Backup completed! File saved as: {{ macbook_backup_dir }}"
 
     - name: Find all backup directories
       ansible.builtin.find:

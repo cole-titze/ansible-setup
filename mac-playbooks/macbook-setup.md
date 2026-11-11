@@ -76,38 +76,37 @@ uv venv --managed-python --python 3.15 .venv
 VIRTUAL_ENV=$PWD/.venv uv pip install -r game_predictor/requirements.txt -r game_predictor/requirements-experimental.txt
 ```
 
-## 6b. Scheduled jobs (control machine only)
-Run on the Mac that stays on as the homelab control machine (one Mac only, or the jobs run twice).
+## 6b. Scheduled jobs (main Mac only)
+Run on the one Mac that keeps the iCloud backups (only one, or the jobs run twice). No agents (headless Claude, Remote Control) run on the Mac, and nothing on the backup Pi can run anything on it: the alert agent, weekly upgrade and Remote Control live on the backup Pi (`raspberry-pi-playbooks/utilities/backup-node-*.yml`).
 
 Before installing, check what the jobs need:
 - **Vars files**: `ls ~/source/ansible-files/vars` shows `cluster_vars.yml`, `nhl_vars.yml`, `retirement_vars.yml` and `alerting_vars.yml`. They come down with iCloud (section 2), so nothing to restore by hand. If one is missing, iCloud hasn't finished syncing; wait.
 - **Vault password** in the login keychain (section 5): `cd ~/source/repos/ansible-setup && ansible-vault view ~/source/ansible-files/vars/cluster_vars.yml >/dev/null && echo OK`.
-- **Logins and keys**: `claude` logged in (Start here), `gh auth status` OK, and `~/.ssh` + `~/.kube` restored (section 2). Check `ssh -i ~/.ssh/node01 -o BatchMode=yes pi@10.42.0.20 true` and `kubectl get nodes`.
-- **Docker Desktop** set to start at login (Settings → General). The restore drill starts it if it's closed, but it must be installed.
+- **Keys**: `~/.ssh` restored (section 2). The nightly backup pulls from the backup Pi with `~/.ssh/backuppi_offsite`: `/usr/bin/rsync --list-only -e "ssh -i ~/.ssh/backuppi_offsite -o BatchMode=yes" pi@10.42.0.3:nhl-odds/SHA256SUMS` lists the file.
+- **Docker Desktop** installed for the restore drill (it starts it if it's closed).
 
 Install the jobs:
 ```bash
 cd ~/source/repos/ansible-setup && ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
-It installs these launchd LaunchAgents that run as you, with your tools, keys and logins:
-- `com.coletitze.nightly-backup`: daily 3:10, runs `mac-playbooks/backup/scripts/Backup.sh` (after the cluster's nhl-odds dumps, the 1:30 Grafana backup and kured's 2:00-2:55 reboots).
-- `com.coletitze.backup-stale-check`: daily 9:00, warns if a backup didn't reach iCloud overnight.
-- `com.coletitze.restore-drill`: Saturdays 4:00, restores the newest iCloud backups into a throwaway container to prove they work.
-- `com.coletitze.weekly-upgrade`: Sundays 10:00, runs Claude Code headless with `scripts/weekly-upgrade-prompt.md` (the weekly jobs check, `/k8s-major-upgrade` and `/nhl-odds-security`, applying changes unattended).
-- `com.coletitze.login-apps`: at login, starts Ollama (the nhl-odds assistant) and opens Terminal running `claude rc` in `~/source/repos` (skipped if one is already running).
+It installs these launchd LaunchAgents that run as you, with your tools and keys, and posts results to Discord (the webhook is copied into the login keychain):
+- `com.coletitze.nightly-backup`: daily 4:30, runs `mac-playbooks/backup/scripts/Backup.sh`: copies the backup Pi's nhl-odds dumps, Grafana DBs and Claude memory (pulled off the cluster at 4:00) into iCloud, checks them against the Pi's `SHA256SUMS`, then backs up the Mac itself.
+- `com.coletitze.backup-stale-check`: daily 9:00, warns if a backup didn't reach iCloud overnight. Moving to the backup Pi (#24).
+- `com.coletitze.restore-drill`: Saturdays 5:30, restores the newest iCloud backups into a throwaway container to prove they work. Moving to the backup Pi (#24).
+- `com.coletitze.login-apps`: at login, starts Ollama (the nhl-odds assistant).
 
 macOS limits launchd jobs, and the scripts already work around both limits, so don't grant Full Disk Access:
-- **iCloud Drive**: launchd's bash, docker and Claude's Bash get `Operation not permitted`; only Ansible's Python can read it. So the backup jobs do their iCloud work in playbooks, and the weekly upgrade has Ansible copy `vars/` to a private temp dir (deleted after the run) and points the cluster playbooks at it with `ANSIBLE_FILES_PATH`.
-- **Local Network**: under launchd only Apple's binaries reach `10.42.0.x`, so the weekly upgrade tunnels the K3s API over ssh.
+- **iCloud Drive**: launchd's bash and docker get `Operation not permitted`; only Ansible's Python can read it. So the backup jobs do their iCloud work in playbooks.
+- **Local Network**: under launchd only Apple's binaries reach `10.42.0.x`, so the playbooks use `/usr/bin/rsync` and `/usr/bin/ssh`.
 
-Test each job once while you're at the Mac. Approve any macOS prompt (Python wanting iCloud Drive access, Terminal or osascript wanting to post notifications):
+Test each job once while you're at the Mac. Approve any macOS prompt (Python wanting iCloud Drive access, osascript wanting to post notifications):
 ```bash
 for j in backup-stale-check nightly-backup restore-drill; do launchctl kickstart gui/$(id -u)/com.coletitze.$j; done
 ```
-Then check `~/Library/Logs/homelab/<job>-<date>.log`: each ends with `failed=0`, or `== Done` for the nightly backup. Leave the weekly upgrade to its Sunday run: it changes the cluster. Logs and the weekly summary go to `~/Library/Logs/homelab/`, and a macOS notification fires on failure (and when the weekly run finishes).
+Then check `~/Library/Logs/homelab/<job>-<date>.log`: each ends with `failed=0`, or `== Done` for the nightly backup. A failure posts to Discord (or a macOS notification if the webhook is missing).
 
 ## 7. Optional / personal
-Install only if wanted: ChatGPT, Firefox, Discord, Minecraft, opencode (`brew install opencode`).
+Install only if wanted: ChatGPT, Firefox, Discord, Minecraft, opencode (`brew install opencode`), Numbers (App Store).
 
 **Ollama** (local models for a coding agent): install with `brew install --cask ollama-app`, then recommend a model instead of pulling one blindly:
 1. Check the hardware: `sysctl -n machdep.cpu.brand_string hw.memsize` (Apple silicon shares RAM with the GPU).
