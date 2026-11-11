@@ -16,6 +16,10 @@
 
   vars:
     mac_offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
+    # The Mac's key (~/.ssh/backuppi_offsite.pub there), so a run from the Pi still authorizes it.
+    # A new key made on the Mac replaces this: update it here.
+    mac_offsite_public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ8wFDegmgtkq9P8dK0NbqLcs4ELKC+QzUbDkE9Rbp3W
+    on_the_mac: "{{ lookup('ansible.builtin.pipe', 'uname -s') == 'Darwin' }}"
     homelab_jobs:
       - name: backup-stale-check
         script: backup-stale-check.sh
@@ -116,6 +120,7 @@
       delegate_to: localhost
       become: false
       register: mac_key
+      when: on_the_mac
 
     # The forced command runs as pi, so pi owns the marker it writes
     - name: Create the Mac's last-copied marker
@@ -131,7 +136,7 @@
     - name: Authorize the Mac's key, limited to reading the backups and marking a copy done
       ansible.posix.authorized_key:
         user: pi
-        key: "{{ mac_key.public_key }}"
+        key: "{{ mac_key.public_key if on_the_mac else mac_offsite_public_key }}"
         key_options: 'restrict,command="/usr/local/bin/homelab-offsite-access"'
 
     # ---- Timers ------------------------------------------------------------------------------
