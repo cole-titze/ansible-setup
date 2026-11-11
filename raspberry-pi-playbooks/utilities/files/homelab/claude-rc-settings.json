@@ -3,24 +3,13 @@
     "defaultMode": "auto",
     "disableBypassPermissionsMode": "disable",
     "allow": [
-      "Bash(homelab-run * --check --diff)",
-      "Bash(homelab-run * --check)",
-      "Bash(kubectl get:*)",
-      "Bash(kubectl describe:*)",
-      "Bash(kubectl logs:*)",
-      "Bash(kubectl top:*)",
-      "Bash(kubectl events:*)",
-      "Bash(kubectl rollout status:*)",
-      "Bash(kubectl rollout history:*)",
-      "Bash(homelab-node:*)",
-      "Bash(journalctl:*)",
-      "Bash(systemctl status:*)",
-      "Bash(systemctl list-timers:*)",
-      "Bash(git status:*)",
-      "Bash(git log:*)",
-      "Bash(git diff:*)",
-      "Bash(git fetch:*)",
-      "Bash(git pull --ff-only:*)"
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "WebSearch",
+      "mcp__claude-code-remote"
     ],
     "deny": [
       "Bash(*reset-kubernetes.yml*)",
@@ -34,6 +23,10 @@
       "Read(//etc/homelab/**)",
       "Edit(~/source/ansible-files/**)",
       "Edit(~/.config/homelab/**)"
+    ],
+    "ask": [
+      "Bash(sudo:*)",
+      "Bash(*sudo *)"
     ]
   }
 }
