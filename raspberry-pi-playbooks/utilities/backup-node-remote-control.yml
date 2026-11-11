@@ -76,6 +76,7 @@
       loop: "{{ groups['cluster'] | union(groups['backup_raspberrypi']) | map('extract', hostvars, 'ansible_host') | unique | list }}"
       register: host_keys
       changed_when: false
+      check_mode: false
 
     - name: Add them to pi's known_hosts
       ansible.builtin.known_hosts:
