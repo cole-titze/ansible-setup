@@ -14,7 +14,6 @@
     "deny": [
       "Bash(*reset-kubernetes.yml*)",
       "Bash(*uninstall-kubernetes.yml*)",
-      "Bash(kubectl delete:*)",
       "Bash(helm uninstall:*)",
       "Bash(rm -rf:*)",
       "Bash(*vault-pass*)",
@@ -26,7 +25,8 @@
     ],
     "ask": [
       "Bash(sudo:*)",
-      "Bash(*sudo *)"
+      "Bash(*sudo *)",
+      "Bash(kubectl delete:*)"
     ]
   }
 }
