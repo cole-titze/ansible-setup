@@ -3,6 +3,7 @@
 # - today's nhl-odds dump (every worker dumps the same DB at 1:00, so the first worker that has it wins)
 # - Grafana DBs (the grafana-db-backup CronJob writes to whichever worker runs Grafana, so all of them)
 # Each folder gets a SHA256SUMS that the Mac's nightly copy checks its iCloud copies against.
+# Also copies pi's Claude memory and ~/claude-work into backups/claude/ for the Mac to store.
 # Usage: nhl-backup-pull.sh <worker-ip>...
 set -u
 
@@ -70,5 +71,15 @@ done
 keep_newest "$BACKUPS/grafana" 'grafana-*.db' $GRAFANA_KEEP
 update_sums "$BACKUPS/grafana" 'grafana-*.db'
 log "grafana: newest $(ls -1 "$BACKUPS"/grafana/grafana-*.db 2>/dev/null | sort | tail -1 | xargs -r basename)"
+
+# ---- Claude on this Pi -------------------------------------------------------------------------
+# pi's Claude memory, settings and working files (the user's main Claude since 2026-11-10), so the
+# Mac's 4:30 copy stores them in iCloud. Same filters as the Mac's own ~/.claude backup; never the
+# login (.credentials.json).
+mkdir -p "$BACKUPS/claude"
+rsync -a --delete --prune-empty-dirs --include=settings.json --include=CLAUDE.md --include=keybindings.json \
+  --include=projects/ --include='projects/*/' --include='projects/*/memory/***' --exclude='*' \
+  /home/pi/.claude/ "$BACKUPS/claude/dot-claude/" && log "claude: memory copied"
+[ -d /home/pi/claude-work ] && rsync -a --delete /home/pi/claude-work/ "$BACKUPS/claude/claude-work/"
 
 exit $status

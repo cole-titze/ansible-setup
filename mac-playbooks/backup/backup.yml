@@ -15,6 +15,10 @@
   import_playbook: grafana/grafana-backup.yml
   tags: ['grafana']
 
+- name: Backup the backup Pi's Claude memory.
+  import_playbook: offsite/claude-backup.yml
+  tags: ['claude']
+
 # Only reached when the nhl-odds and Grafana copies succeeded (a failed play stops the run)
 - name: Mark the iCloud copy done on the backup Pi.
   import_playbook: offsite/mark-copied.yml

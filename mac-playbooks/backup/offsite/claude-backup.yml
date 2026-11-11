@@ -1,0 +1,70 @@
+---
+# Stores the backup Pi's Claude memory, settings and ~/claude-work (its 4:00 job puts them in
+# ~pi/backups/claude/) in iCloud as dated folders, kept 30 days like the MacBook backup. The Mac only
+# stores these files; nothing on the Mac loads them (no Pi → Mac paths, CLAUDE.md "The Mac").
+- name: Backup the backup Pi's Claude memory
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    backup_pi: pi@10.42.0.3
+    offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
+    staging_dir: "{{ lookup('env', 'HOME') }}/source/backups/backup-pi-claude/"
+    icloud_base_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/backup-pi-claude"
+    keep_days: 30
+
+  tasks:
+    # /usr/bin/rsync and ssh: under launchd, macOS Local Network privacy only lets Apple's binaries
+    # reach 10.42.0.x. No --delete: the Pi's read-only rrsync refuses it, so staging is rebuilt.
+    - name: Clear staging
+      ansible.builtin.file:
+        path: "{{ staging_dir }}"
+        state: absent
+
+    - name: Ensure the staging directory exists
+      ansible.builtin.file:
+        path: "{{ staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Pull the Pi's Claude backup to staging
+      ansible.builtin.command:
+        argv: [/usr/bin/rsync, -rt, -e, "ssh -i {{ offsite_key }} -o BatchMode=yes -o ConnectTimeout=10",
+               "{{ backup_pi }}:claude/", "{{ staging_dir }}"]
+      changed_when: false
+
+    - name: Check the memory index came across
+      ansible.builtin.find:
+        paths: "{{ staging_dir }}dot-claude/projects"
+        patterns: MEMORY.md
+        recurse: true
+      register: memory_index
+      failed_when: memory_index.matched == 0
+
+    - name: Pin this run's folder name
+      ansible.builtin.set_fact:
+        icloud_dir: "{{ icloud_base_dir }}/backup_{{ ansible_facts['date_time']['date'] }}"
+
+    - name: Copy it into iCloud
+      ansible.builtin.copy:
+        src: "{{ staging_dir }}"
+        dest: "{{ icloud_dir }}/"
+        mode: preserve
+
+    - name: Find the iCloud copies
+      ansible.builtin.find:
+        paths: "{{ icloud_base_dir }}"
+        patterns: "backup_*"
+        file_type: directory
+      register: copies
+
+    # Names are dated; always keep the newest
+    - name: Remove copies older than keep_days
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (copies.files | sort(attribute='path', reverse=true))[1:]
+                | selectattr('mtime', 'lt', (ansible_facts['date_time']['epoch'] | int) - keep_days * 86400) | list }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
