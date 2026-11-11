@@ -1,4 +1,6 @@
 ---
+# No automatic agents (headless Claude) run on the Mac, and nothing on the backup Pi can run anything
+# here; agent jobs live on the backup Pi (raspberry-pi-playbooks/utilities/backup-node-*.yml).
 # Installs the Mac's scheduled jobs as launchd LaunchAgents (they run as you, with your PATH tools,
 # ssh keys, kubeconfig, gh/Claude logins and iCloud Drive). Re-run after changing a schedule.
 #   ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
@@ -39,7 +41,7 @@
       # alert-agent and weekly-upgrade moved to the backup Pi (utilities/backup-node-alert-agent.yml,
       # backup-node-weekly-upgrade.yml). Removing a job here doesn't unload it:
       # launchctl bootout gui/$(id -u)/<label> and rm its plist.
-      # At login: start Ollama (nhl-odds assistant) and a Terminal running `claude rc`
+      # At login: start Ollama (nhl-odds assistant). Remote Control runs on the backup Pi.
       - name: login-apps
         label: com.coletitze.login-apps
         script: login-apps.sh

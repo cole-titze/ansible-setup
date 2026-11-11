@@ -56,6 +56,10 @@ ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 
 Helper scripts (need `chmod +x`): `raspberry-pi-playbooks/utilities/scripts/Deploy.sh`, `Upgrade.sh`, `Uninstall.sh`.
 
+## The Mac
+
+No automatic agents (headless Claude, Remote Control) run on the MacBook, and nothing on the backup Pi can run anything on it (Remote Login off, no Pi → Mac paths); it holds sensitive data. Its launchd jobs only back up: the nightly copy (which the Mac starts, pulling from the Pi), and until #24 wraps up, the iCloud stale check and restore drill. New automation goes on the backup Pi.
+
 ## Inventory
 
 Defined in `inventories/inventory.ini`. Group variables in `inventories/group_vars/`.
@@ -107,7 +111,7 @@ The Mac's nightly backup (4:30) copies those folders into iCloud through a non-i
 
 `utilities/backup-node-jobs.yml`: the backup Pi's systemd timers (moving the Mac's launchd jobs there, #24). `homelab-backup-stale-check` (9:00) posts to Discord if the newest dump or Grafana DB on the Pi is over 26h old, or the Mac's copy is over 48h old. `homelab-restore-drill` (Sat 5:00) restores the newest dump into a throwaway PostgreSQL 18 (PGDG packages, server disabled, socket-only scratch cluster in `/var/tmp/restore-drill`) and checks the newest Grafana DB. Scripts in `utilities/files/homelab/`, logs in `/var/log/homelab/`, Discord webhook in root-only `/etc/homelab/discord-webhook` (from `alerting_vars.yml`; re-run the playbook after changing it). Run one now: `sudo systemctl start homelab-<job>.service`.
 
-`utilities/backup-node-alert-agent.yml`: the alert agent (moved from the Mac). `homelab-alert-agent.timer` runs every minute as root: asks Alertmanager for new alerts sent to Discord and runs headless Claude Code as `pi` (dontAsk, tool allowlist in the script; nodes only through `homelab-node`'s command allowlist) with `alert-agent-prompt.md`, then posts the report to Discord. Claude login: a `claude setup-token` token in root-only `/etc/homelab/claude-oauth-token`; the timer is only enabled once it exists. State in `/var/lib/homelab/alert-agent`, logs `/var/log/homelab/alert-agent-*`, reports `~pi/alert-agent/`. Next steps go to `~pi/backups/alert-agent/next-steps.txt`, which the Mac's nightly backup merges into the follow-ups list. New alerts wait while the weekly upgrade runs.
+`utilities/backup-node-alert-agent.yml`: the alert agent (moved from the Mac). `homelab-alert-agent.timer` runs every minute as root: asks Alertmanager for new alerts sent to Discord and runs headless Claude Code as `pi` (dontAsk, tool allowlist in the script; nodes only through `homelab-node`'s command allowlist) with `alert-agent-prompt.md`, then posts the report to Discord. Claude login: a `claude setup-token` token in root-only `/etc/homelab/claude-oauth-token`; the timer is only enabled once it exists. State in `/var/lib/homelab/alert-agent`, logs `/var/log/homelab/alert-agent-*`, reports `~pi/alert-agent/`. Next steps go to `~pi/backups/alert-agent/next-steps.txt` and the Discord report; nothing from the Pi is fed into the Mac. New alerts wait while the weekly upgrade runs.
 
 `utilities/backup-node-remote-control.yml`: Claude Code Remote Control on the backup Pi (`claude-rc.service`, session **backup-pi**, as `pi` in `~pi/source/repos/ansible-setup`, settings `/etc/homelab-claude-rc-settings.json` from `utilities/files/homelab/claude-rc-settings.json`). The Pi has Ansible (Debian's package), the roles, the vaulted vars in `~pi/source/ansible-files/vars` and the vault password in `~pi/.config/homelab/vault-pass` (copied from the Mac by the playbook; re-run it after changing vars). The inventory's `~/.ssh/<host>` key names are symlinks to pi's `homelab_nodes` key.
 

@@ -3,8 +3,8 @@
 # (backup-node-alert-agent.yml; the Pi version of the Mac's scheduled-jobs/scripts/alert-agent.sh).
 # Asks Alertmanager for the alerts it's sending to Discord, and for new ones runs Claude Code
 # headless (as pi, not root) with alert-agent-prompt.md to investigate and apply safe fixes, then
-# posts its report to the same Discord channel. Next steps go to ~pi/backups/alert-agent/, where the
-# Mac's nightly copy picks them up for my follow-ups list. The session runs in dontAsk mode with
+# posts its report to the same Discord channel. Next steps go to ~pi/backups/alert-agent/next-steps.txt
+# (and in the Discord report); nothing from here is fed into the Mac. The session runs in dontAsk mode with
 # ALLOWED_TOOLS: anything not listed is refused (no prompt to answer), so the limits don't depend on
 # the prompt. Nodes only through homelab-node, which has its own command allowlist.
 # - One session per poll for all new alerts (one incident often fires several).
@@ -198,8 +198,7 @@ Write the final report to $REPORT as well as printing it." \
 ) >>"$LOG" 2>&1
 status=$?
 
-# Next steps for the follow-ups list ("NOW: ..." / "LATER: ..."): the Mac's nightly copy merges
-# new lines into it, keyed by run name. Keep the list short.
+# Next steps ("NOW: ..." / "LATER: ...") kept in a short list on the Pi, keyed by run name
 if [ -s "$NEXT" ]; then
   grep -E '^(NOW|LATER):' "$NEXT" | head -3 | cut -c1-450 | sed "s/^/$RUN\t/" >>"$NEXT_LIST"
   tail -n 200 "$NEXT_LIST" >"$NEXT_LIST.tmp" && mv "$NEXT_LIST.tmp" "$NEXT_LIST"

@@ -23,7 +23,7 @@ Steps:
 2. If an alert has the label test="true", it's a pipeline test: confirm you received it, change nothing, don't write a next-steps file, and stop.
 3. Find the root cause. One incident often fires several alerts (a node going down fires NodeDown, the DB-instance, Longhorn and DNS alerts); treat related alerts as one problem.
 4. Apply a safe fix if one fits, and verify it.
-5. If anything is left for me (a fix you can't make, a code/config change, a DB write, something to watch), write it to the next-steps file (path below), one line per incident, at most 3 lines. The script adds them to my follow-ups list (my Mac picks them up overnight):
+5. If anything is left for me (a fix you can't make, a code/config change, a DB write, something to watch), write it to the next-steps file (path below), one line per incident, at most 3 lines. The script keeps them in a list on this Pi (~/backups/alert-agent/next-steps.txt):
    - `NOW: Alert <YYYY-MM-DD HH:MM> <AlertName>: <cause in a few words>. Next: <exact steps or commands>` if I can act on it today
    - `LATER: Alert <YYYY-MM-DD HH:MM> <AlertName>: <cause>. Next: <steps>, <date or blocker>` otherwise
    Nothing left for me (or a test/resolved alert): don't write the file.
