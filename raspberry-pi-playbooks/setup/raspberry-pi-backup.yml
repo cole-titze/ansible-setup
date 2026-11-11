@@ -99,8 +99,11 @@
         state: restarted
         enabled: yes
 
+    # Through the role (not import_tasks) so its defaults (pihole_dnsmasq_lines, ...) load too
     - name: Install Pi-hole
-      ansible.builtin.import_tasks: ../../roles/docker/tasks/services/pi-hole/pi-hole.yml
+      ansible.builtin.import_role:
+        name: docker
+        tasks_from: services/pi-hole/pi-hole.yml
 
     - name: Copy DHCP failover script to backup Pi-hole
       copy:

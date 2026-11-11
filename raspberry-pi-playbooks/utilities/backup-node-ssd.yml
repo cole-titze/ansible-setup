@@ -26,6 +26,8 @@
         dest: "/tmp/smartctl_exporter-{{ smartctl_exporter_version }}.tar.gz"
         checksum: "sha256:{{ smartctl_exporter_sha256 }}"
         mode: '0644'
+      # Only a checksummed file in /tmp, so dry runs download it too and can check the install below
+      check_mode: false
 
     - name: Install smartctl exporter binary
       ansible.builtin.unarchive:

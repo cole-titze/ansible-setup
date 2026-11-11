@@ -32,6 +32,13 @@
 
   tasks:
     # ---- Packages ----------------------------------------------------------------------------
+    # deb822_repository needs it (its install_python_debian option is missing from the Pi's
+    # Debian Ansible, so install it here and the playbook runs from the Mac or the Pi)
+    - name: Install python3-debian
+      ansible.builtin.apt:
+        name: python3-debian
+        state: present
+
     # Debian ships PostgreSQL 17; the drill needs prod's major (18) to read the dumps
     - name: Add the PostgreSQL apt repo (PGDG)
       ansible.builtin.deb822_repository:
@@ -41,7 +48,6 @@
         suites: ["trixie-pgdg"]
         components: [main]
         signed_by: https://www.postgresql.org/media/keys/ACCC4CF8.asc
-        install_python_debian: true
 
     - name: Install PostgreSQL 18 and sqlite3 for the restore drill
       ansible.builtin.apt:
