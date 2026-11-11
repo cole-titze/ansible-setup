@@ -1,0 +1,100 @@
+---
+# Rootless Docker for pi on the backup Pi, so Claude (Remote Control) can run test copies of the apps
+# (docker compose, local e2e and k6 runs) before changes reach the cluster.
+# Rootless on purpose: the daemon runs as pi, inside pi's own user namespace, so being able to use
+# Docker doesn't mean being root (the docker group would), and it leaves the host firewall
+# (inet dnspi, dns-pi-hardening.yml) alone. The system-wide (root) daemon is masked.
+# Published ports listen on the Pi itself; nothing new is opened to the LAN (dnspi stays default-drop).
+- name: Rootless Docker on the backup Pi
+  hosts: backup_raspberrypi
+  gather_facts: false
+  become: true
+
+  vars:
+    docker_user: pi
+    docker_uid: 1000
+
+  tasks:
+    - name: Install what rootless Docker needs
+      ansible.builtin.apt:
+        name: [ca-certificates, uidmap, dbus-user-session, slirp4netns]
+        state: present
+
+    - name: Add Docker's apt repository
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: deb
+        uris: https://download.docker.com/linux/debian
+        suites: trixie
+        components: stable
+        architectures: arm64
+        signed_by: https://download.docker.com/linux/debian/gpg
+
+    - name: Install Docker
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+          - docker-ce-rootless-extras
+        state: present
+        update_cache: true
+      # A dry run doesn't add the repository, so the packages aren't found yet
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Turn off the system-wide (root) Docker daemon
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+        masked: true
+      loop: [docker.service, docker.socket]
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Give pi subordinate user and group ids (the user namespace's range)
+      ansible.builtin.lineinfile:
+        path: "{{ item }}"
+        regexp: "^{{ docker_user }}:"
+        line: "{{ docker_user }}:100000:65536"
+      loop: [/etc/subuid, /etc/subgid]
+
+    # Elasticsearch won't start below this
+    - name: Allow Elasticsearch's memory maps
+      ansible.posix.sysctl:
+        name: vm.max_map_count
+        value: "262144"
+        sysctl_file: /etc/sysctl.d/90-docker-elasticsearch.conf
+
+    - name: Keep pi's user services (the rootless daemon) running without a login
+      ansible.builtin.command: loginctl enable-linger {{ docker_user }}
+      args:
+        creates: /var/lib/systemd/linger/{{ docker_user }}
+
+    - name: Set up rootless Docker for pi
+      ansible.builtin.command: dockerd-rootless-setuptool.sh install
+      become_user: "{{ docker_user }}"
+      environment:
+        XDG_RUNTIME_DIR: /run/user/{{ docker_uid }}
+        DBUS_SESSION_BUS_ADDRESS: unix:path=/run/user/{{ docker_uid }}/bus
+      args:
+        creates: /home/{{ docker_user }}/.config/systemd/user/docker.service
+
+    - name: Start rootless Docker with pi's user services
+      ansible.builtin.systemd:
+        name: docker.service
+        scope: user
+        state: started
+        enabled: true
+      become_user: "{{ docker_user }}"
+      ignore_errors: "{{ ansible_check_mode }}"
+      environment:
+        XDG_RUNTIME_DIR: /run/user/{{ docker_uid }}
+
+    - name: Point pi's docker CLI at the rootless daemon
+      ansible.builtin.command: docker context use rootless
+      become_user: "{{ docker_user }}"
+      register: docker_context
+      changed_when: "'Current context is now' in docker_context.stdout"
+      when: not ansible_check_mode

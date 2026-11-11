@@ -127,3 +127,11 @@
   import_playbook: ../utilities/backup-node-exporter.yml
 - name: Backup stale check, restore drill and the Mac's offsite copy access
   import_playbook: ../utilities/backup-node-jobs.yml
+- name: Alert agent (headless Claude Code on new Discord alerts)
+  import_playbook: ../utilities/backup-node-alert-agent.yml
+- name: Claude Code Remote Control, Ansible and the vaulted vars
+  import_playbook: ../utilities/backup-node-remote-control.yml
+- name: Weekly upgrade (headless Claude Code, Sundays)
+  import_playbook: ../utilities/backup-node-weekly-upgrade.yml
+- name: Rootless Docker for test copies of the apps
+  import_playbook: ../utilities/backup-node-docker.yml

@@ -2,7 +2,7 @@
 # The weekly upgrade on the backup Pi (ansible-setup #24; moved from the Mac's launchd job).
 # homelab-weekly-upgrade.timer (Sun 10:00 CT) runs headless Claude Code as pi with
 # weekly-upgrade-prompt.md: check the Sunday jobs and uptime blips, /k8s-major-upgrade, and the
-# nhl-odds security pass (app changes go through PRs and CI; the Pi has no .NET/Node/Docker).
+# nhl-odds security pass (app changes go through PRs and CI; the Pi has no .NET/Node).
 # /update-mac isn't part of it any more (run it by hand on the Mac). Posts the summary to Discord.
 # Needs, from the other backup-node-*.yml playbooks: the claude CLI and token (alert agent), kubectl,
 # ssh keys, Ansible and homelab-run (Remote Control). gh is logged in as pi by hand (`gh auth login
@@ -35,12 +35,14 @@
         msg: "Log gh in as pi first: gh auth login --hostname github.com --git-protocol https --web --scopes workflow && gh auth setup-git"
       when: gh_status.rc != 0
 
-    # Same name and email as the Mac's commits
+    # Same name and email as the commits of whoever runs the playbook (the email may be blank on
+    # purpose, which git_config can't set, so plain git config)
     - name: Set pi's git identity
-      community.general.git_config:
-        name: "{{ item.name }}"
-        value: "{{ item.value }}"
-        scope: global
+      ansible.builtin.shell: |
+        [ "$(git config --global --get {{ item.name }})" = {{ item.value | quote }} ] && exit 0
+        git config --global {{ item.name }} {{ item.value | quote }} && echo changed
+      register: git_identity
+      changed_when: "'changed' in git_identity.stdout"
       loop:
         - { name: user.name, value: "{{ lookup('pipe', 'git config --global user.name') }}" }
         - { name: user.email, value: "{{ lookup('pipe', 'git config --global user.email') }}" }
@@ -104,6 +106,7 @@
         group: pi
         mode: "0755"
 
+    # Only where the Mac's copy exists (run from the Mac); run from the Pi, the history starts fresh
     - name: Copy the uptime-blip history from the Mac (once)
       ansible.builtin.copy:
         src: "{{ mac_home }}/Library/Logs/homelab/uptime-blips.csv"
@@ -112,6 +115,7 @@
         group: pi
         mode: "0644"
         force: false
+      when: lookup('ansible.builtin.fileglob', mac_home + '/Library/Logs/homelab/uptime-blips.csv') | length > 0
 
     - name: Install the weekly upgrade script and prompt
       ansible.builtin.copy:
