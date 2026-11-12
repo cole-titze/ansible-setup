@@ -199,7 +199,7 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/b
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-alert-agent.yml
 # Remote Control (claude-rc.service)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-remote-control.yml
-# Weekly upgrade (Sun 10:00; needs gh logged in as pi first)
+# Weekly upgrade (Sat 10:00; needs gh logged in as pi first)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-weekly-upgrade.yml
 ```
 

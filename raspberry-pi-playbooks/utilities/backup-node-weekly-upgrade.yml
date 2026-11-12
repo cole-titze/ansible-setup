@@ -1,7 +1,7 @@
 ---
 # The weekly upgrade on the backup Pi (ansible-setup #24; moved from the Mac's launchd job).
-# homelab-weekly-upgrade.timer (Sun 10:00 CT) runs headless Claude Code as pi with
-# weekly-upgrade-prompt.md: check the Sunday jobs and uptime blips, /k8s-major-upgrade, and the
+# homelab-weekly-upgrade.timer (Sat 10:00 CT) runs headless Claude Code as pi with
+# weekly-upgrade-prompt.md: check the Saturday jobs and uptime blips, /k8s-major-upgrade, and the
 # nhl-odds security pass (app changes go through PRs and CI; the Pi has no .NET/Node).
 # /update-mac isn't part of it any more (run it by hand on the Mac). Posts the summary to Discord.
 # Needs, from the other backup-node-*.yml playbooks: the claude CLI and token (alert agent), kubectl,
@@ -158,7 +158,7 @@
           Description=Weekly homelab upgrade (schedule)
 
           [Timer]
-          OnCalendar=Sun *-*-* 10:00:00
+          OnCalendar=Sat *-*-* 10:00:00
           Persistent=true
 
           [Install]

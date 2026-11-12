@@ -134,7 +134,7 @@
   import_playbook: ../utilities/backup-node-alert-agent.yml
 - name: Claude Code Remote Control, Ansible and the vaulted vars
   import_playbook: ../utilities/backup-node-remote-control.yml
-- name: Weekly upgrade (headless Claude Code, Sundays)
+- name: Weekly upgrade (headless Claude Code, Saturdays)
   import_playbook: ../utilities/backup-node-weekly-upgrade.yml
 - name: Rootless Docker for test copies of the apps
   import_playbook: ../utilities/backup-node-docker.yml

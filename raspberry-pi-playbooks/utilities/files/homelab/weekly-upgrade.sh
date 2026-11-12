@@ -1,6 +1,6 @@
 #!/bin/bash
 # Weekly homelab upgrade + nhl-odds security pass on the backup Pi, started by
-# homelab-weekly-upgrade.timer on Sundays at 10:00 CT (backup-node-weekly-upgrade.yml; moved from the
+# homelab-weekly-upgrade.timer on Saturdays at 10:00 CT (backup-node-weekly-upgrade.yml; moved from the
 # Mac's launchd job). Runs Claude Code headless as pi with weekly-upgrade-prompt.md, with pi's
 # kubectl, gh, ansible, ssh keys and the skills in ~pi/.claude/skills, then posts the summary to
 # Discord. The alert agent holds new alerts while this runs (its upgrades fire alerts).
