@@ -1099,7 +1099,7 @@ spec:
                   value: America/Chicago
                 - name: RUN_MODE
                   value: SearchIndex
-                # nhl_writer only for its ErrorLog row on failure; the index is built from reads
+                # nhl_writer only for its lock, JobStatus and ErrorLog rows; the index is built from reads
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
@@ -1107,6 +1107,10 @@ spec:
                       key: password
                 - name: NHL_DATABASE
                   value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
+                # The documents come from the replicas: reading every team, player, game and article each hour
+                # took the primary to a full core and slowed the site's pages (heavy load test 158)
+                - name: NHL_DATABASE_READ
+                  value: "Host=nhl-odds-database-ro;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD)"
                 - name: ELASTICSEARCH_URL
                   value: http://nhl-odds-elasticsearch:9200
                 - name: ELASTICSEARCH_USERNAME
