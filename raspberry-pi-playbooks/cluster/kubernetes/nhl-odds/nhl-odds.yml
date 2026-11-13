@@ -73,6 +73,8 @@
       register: schema_sql
       delegate_to: localhost
       become: false
+      # A plain GET; check mode would skip it and the template needs its content
+      check_mode: false
 
     - name: Load image pins.
       ansible.builtin.import_tasks: ../cluster-maintenance/image-pins.yml
