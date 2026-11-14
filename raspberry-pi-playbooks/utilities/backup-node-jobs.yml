@@ -4,6 +4,8 @@
 #   Grafana DB is over a day old, or the Mac hasn't copied them to iCloud for 2 days
 # - restore-drill (Sat 5:00): restores the newest dump into a throwaway PostgreSQL 18 and checks
 #   the newest Grafana DB
+# - weekly-lighthouse (Sat 7:15): Lighthouse report on the live nhl-odds site (Cloudflare blocks
+#   GitHub's runners), in pi's rootless Docker (backup-node-docker.yml); ~pi/homelab/lighthouse/
 # - The Mac's offsite key: read-only rsync of /home/pi/backups for its nightly iCloud copy, plus
 #   "mark-copied" so the stale check knows the copy happened
 # systemd timers with Persistent=true, so a run missed while the Pi was off happens at boot.
@@ -29,6 +31,10 @@
         script: restore-drill.sh
         description: Restore the newest nhl-odds dump and Grafana DB to prove they work
         on_calendar: "Sat *-*-* 05:00:00"
+      - name: weekly-lighthouse
+        script: weekly-lighthouse.sh
+        description: Score the live nhl-odds site with Lighthouse
+        on_calendar: "Sat *-*-* 07:15:00"
 
   # alerting_vars.yml: alerting_discord_webhook_url, the channel the jobs report to
   vars_files:
@@ -109,7 +115,7 @@
         owner: root
         group: root
         mode: "0755"
-      loop: [backup-stale-check.sh, restore-drill.sh, offsite-access.sh]
+      loop: [backup-stale-check.sh, restore-drill.sh, offsite-access.sh, weekly-lighthouse.sh]
 
     # ---- The Mac's offsite key ---------------------------------------------------------------
     - name: Create the Mac's offsite key
