@@ -51,6 +51,16 @@
         name: [ansible, python3-kubernetes, python3-jmespath]
         state: present
 
+    # Debian 13 ships kubernetes.core 6.1.0, which runs `helm list --all` (gone in Helm v4), so every
+    # kubernetes.core.helm task fails against node01's helm v4. 6.5.0+ supports Helm v4; pi's own
+    # collections path comes before the system one.
+    - name: Install kubernetes.core 6.5.0+ for pi (Helm v4 support)
+      ansible.builtin.command: ansible-galaxy collection install 'kubernetes.core:>=6.5.0'
+      become: true
+      become_user: pi
+      register: k8s_core
+      changed_when: "'installed successfully' in k8s_core.stdout"
+
     - name: Copy the roles (requirements.yml pulls them over ssh from private repos)
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../roles/{{ item }}"
