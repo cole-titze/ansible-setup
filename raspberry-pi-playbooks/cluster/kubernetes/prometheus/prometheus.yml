@@ -26,6 +26,7 @@
       - BackupPiDiskFilling
       - BackupPiDbPullStale
       - PiholeFailoverActive
+      - NhlOddsClientErrorCapHit
       # slo-rules.yml
       - NhlOddsAvailabilityBurn
       - NhlOddsAvailabilitySlowBurn
@@ -599,6 +600,15 @@
                       severity: warning
                     annotations:
                       summary: Backup Pi took over DHCP, primary Pi-hole (node04) not answering pings
+                  # POST /api/ClientError saves at most 500 browser error reports a day for all visitors
+                  # together (nhl-odds ClientErrorLimits.DailyCap); past that, real errors are dropped
+                  # silently until the next UTC day. A few IPs can fill it, or a real error flood can.
+                  - alert: NhlOddsClientErrorCapHit
+                    expr: sum(increase(client_error_reports_total{result="over_daily_cap"}[1h])) > 0
+                    labels:
+                      severity: warning
+                    annotations:
+                      summary: nhl-odds browser error reports hit the 500/day cap; new ones are dropped until 00:00 UTC (check ErrorLog Source='Frontend' for a flood or one repeated sender)
 
     # SLOs (site availability, API errors+latency) and job-freshness alerts. Plain YAML, not a
     # template, so promtool can test the same file: see the command at the top of slo-rules.yml.
