@@ -220,7 +220,7 @@ spec:
           containers:
             - name: updater
               # kubectl + curl + jq; keep in step with the K3s minor
-              image: alpine/k8s:1.36.5
+              image: alpine/k8s:1.36.6
               env:
                 # CI moves :prod to a build only after its tests, checks and smoke test pass
                 - name: PROMOTE_TAG
