@@ -1,0 +1,84 @@
+---
+# Last step of the nightly backup (backup.yml), the Mac-only checks the backup Pi can't do
+# (moved here from the retired Mac restore drill, #24):
+# - MacBook: the newest iCloud backup folder has the kubeconfig, ssh keys and Claude settings
+# - Vault: the login keychain's vault password opens every ansible-files vars file
+#   (a rebuilt Mac needs it; the password itself is in Apple Passwords)
+# A failure fails the nightly backup, which posts to Discord. The Pi's 9:00 stale check covers a
+# night the Mac never ran (no copy for 2 days).
+- name: Check the MacBook backup and the vault password
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    home: "{{ lookup('env', 'HOME') }}"
+    macbook_backups_dir: "{{ home }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
+    vars_dir: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or home + '/source/ansible-files' }}/vars"
+    key_folders: [kube, ssh, claude]
+
+  tasks:
+    # ---- MacBook ------------------------------------------------------------------------
+    - name: Find the MacBook backups
+      ansible.builtin.find:
+        paths: "{{ macbook_backups_dir }}"
+        patterns: "backup_*"
+        file_type: directory
+      register: mac_backups
+
+    # Names are dated, so the newest is last by name
+    - name: Pick the newest MacBook backup
+      ansible.builtin.set_fact:
+        newest_mac: "{{ mac_backups.files | map(attribute='path') | sort | last | default('') }}"
+
+    - name: Count the key files in it
+      ansible.builtin.find:
+        paths: "{{ newest_mac }}/{{ item }}"
+        file_type: file
+        recurse: true
+      loop: "{{ key_folders }}"
+      register: mac_files
+      when: newest_mac != ''
+
+    - name: Show the MacBook result
+      ansible.builtin.debug:
+        msg: >-
+          macbook: {{ (newest_mac | basename ~ ': ' ~ (mac_files.results | map(attribute='matched')
+          | zip(key_folders) | map('reverse') | map('join', ' ') | join(', ')) ~ ' files')
+          if newest_mac != '' else 'no backup found' }}
+
+    # ---- Vault --------------------------------------------------------------------------
+    - name: Find the vars files
+      ansible.builtin.find:
+        paths: "{{ vars_dir }}"
+        patterns: "*.yml"
+      register: vault_vars_files
+
+    - name: Check the vault password opens each vars file
+      ansible.builtin.include_vars:
+        file: "{{ item.path }}"
+        name: vault_check
+      loop: "{{ vault_vars_files.files }}"
+      register: vault_check
+      ignore_errors: true
+      no_log: true
+
+    - name: Fail if a check didn't pass
+      vars:
+        empty_folders: "{{ [] if newest_mac == '' else (mac_files.results | selectattr('matched', 'equalto', 0)
+          | map(attribute='item') | list) }}"
+        undecryptable: "{{ vault_check.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
+          | map(attribute='item.path') | map('basename') | list }}"
+        failures: "{{ (['macbook: no backup found'] if newest_mac == '' else [])
+          + (empty_folders | map('regex_replace', '^(.*)$', 'macbook: \\1 folder empty') | list)
+          + (['vault: no vars files found'] if vault_vars_files.matched == 0 else [])
+          + (undecryptable | map('regex_replace', '^', 'vault: can not decrypt ') | list) }}"
+      block:
+        - name: Show the vault result
+          ansible.builtin.debug:
+            msg: "vault: {{ vault_vars_files.matched - undecryptable | length }}/{{ vault_vars_files.matched }} vars files decrypt"
+
+        - name: Fail on any problem
+          ansible.builtin.fail:
+            msg: "MAC CHECKS FAILED: {{ failures | join(', ') }}"
+          when: failures | length > 0

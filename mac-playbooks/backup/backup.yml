@@ -24,6 +24,11 @@
   import_playbook: offsite/mark-copied.yml
   tags: ['nhl-odds', 'grafana']
 
+# After mark-copied so a failure here doesn't hold back the Pi's copy marker
+- name: Check the MacBook backup and the vault password.
+  import_playbook: mac-checks.yml
+  tags: ['macbook', 'checks']
+
 # Not using minecraft kubernetes yet
 # - name: Backup minecraft.
 #   import_playbook: minecraft/minecraft-backup.yml

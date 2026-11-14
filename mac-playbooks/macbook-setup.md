@@ -65,7 +65,7 @@ The vars files in `~/source/ansible-files/vars` are ansible-vault encrypted. `an
 security add-generic-password -a "$USER" -s ansible-vault -l "Ansible vault (ansible-files/vars)" -w
 cd ~/source/repos/ansible-setup && ansible-vault view ~/source/ansible-files/vars/cluster_vars.yml >/dev/null && echo OK
 ```
-Edit a vars file with `ansible-vault edit <file>`, never a text editor (it would save it unencrypted or corrupt it). The Saturday restore drill (6b) checks the keychain password still opens all of them.
+Edit a vars file with `ansible-vault edit <file>`, never a text editor (it would save it unencrypted or corrupt it). The nightly backup (6b) checks the keychain password still opens all of them.
 
 ## 6. Repos and Claude skills
 Clone into `~/source/repos`: `ansible-setup`, `claude-skills`, `nhl-odds`, `retirement-calculator`, `containers`, and the `ansible-role-*` repos.
@@ -83,16 +83,13 @@ Before installing, check what the jobs need:
 - **Vars files**: `ls ~/source/ansible-files/vars` shows `cluster_vars.yml`, `nhl_vars.yml`, `retirement_vars.yml` and `alerting_vars.yml`. They come down with iCloud (section 2), so nothing to restore by hand. If one is missing, iCloud hasn't finished syncing; wait.
 - **Vault password** in the login keychain (section 5): `cd ~/source/repos/ansible-setup && ansible-vault view ~/source/ansible-files/vars/cluster_vars.yml >/dev/null && echo OK`.
 - **Keys**: `~/.ssh` restored (section 2). The nightly backup pulls from the backup Pi with `~/.ssh/backuppi_offsite`: `/usr/bin/rsync --list-only -e "ssh -i ~/.ssh/backuppi_offsite -o BatchMode=yes" pi@10.42.0.3:nhl-odds/SHA256SUMS` lists the file.
-- **Docker Desktop** installed for the restore drill (it starts it if it's closed).
 
 Install the jobs:
 ```bash
 cd ~/source/repos/ansible-setup && ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
 It installs these launchd LaunchAgents that run as you, with your tools and keys, and posts results to Discord (the webhook is copied into the login keychain):
-- `com.coletitze.nightly-backup`: daily 4:30, runs `mac-playbooks/backup/scripts/Backup.sh`: copies the backup Pi's nhl-odds dumps, Grafana DBs and Claude memory (pulled off the cluster at 4:00) into iCloud, checks them against the Pi's `SHA256SUMS`, then backs up the Mac itself.
-- `com.coletitze.backup-stale-check`: daily 9:00, warns if a backup didn't reach iCloud overnight. Moving to the backup Pi (#24).
-- `com.coletitze.restore-drill`: Saturdays 5:30, restores the newest iCloud backups into a throwaway container to prove they work. Moving to the backup Pi (#24).
+- `com.coletitze.nightly-backup`: daily 4:30, runs `mac-playbooks/backup/scripts/Backup.sh`: copies the backup Pi's nhl-odds dumps, Grafana DBs and Claude memory (pulled off the cluster at 4:00) into iCloud, checks them against the Pi's `SHA256SUMS`, then backs up the Mac itself and checks that backup has its kube/ssh/claude files and the keychain vault password opens every vars file (`mac-playbooks/backup/mac-checks.yml`). The stale check and restore drill run on the backup Pi; the playbook removes the old Mac copies of them.
 - `com.coletitze.login-apps`: at login, starts Ollama (the nhl-odds assistant).
 
 macOS limits launchd jobs, and the scripts already work around both limits, so don't grant Full Disk Access:
@@ -101,9 +98,9 @@ macOS limits launchd jobs, and the scripts already work around both limits, so d
 
 Test each job once while you're at the Mac. Approve any macOS prompt (Python wanting iCloud Drive access, osascript wanting to post notifications):
 ```bash
-for j in backup-stale-check nightly-backup restore-drill; do launchctl kickstart gui/$(id -u)/com.coletitze.$j; done
+launchctl kickstart gui/$(id -u)/com.coletitze.nightly-backup
 ```
-Then check `~/Library/Logs/homelab/<job>-<date>.log`: each ends with `failed=0`, or `== Done` for the nightly backup. A failure posts to Discord (or a macOS notification if the webhook is missing).
+Then check `~/Library/Logs/homelab/nightly-backup-<date>.log` ends with `== Done`. A failure posts to Discord (or a macOS notification if the webhook is missing).
 
 ## 7. Optional / personal
 Install only if wanted: ChatGPT, Firefox, Discord, Minecraft, opencode (`brew install opencode`), Numbers (App Store).

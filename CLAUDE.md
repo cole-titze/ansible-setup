@@ -49,8 +49,7 @@ ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/u
 # Mac backups (no inventory flag needed)
 ansible-playbook mac-playbooks/backup/backup.yml
 
-# Install/refresh the Mac's launchd jobs (nightly backup 4:30, stale-backup check 9:00,
-# restore drill Sat 5:30; reports go to Discord)
+# Install/refresh the Mac's launchd jobs (nightly backup 4:30, login apps; reports go to Discord)
 ansible-playbook mac-playbooks/scheduled-jobs/scheduled-jobs.yml
 ```
 
@@ -58,7 +57,7 @@ Helper scripts (need `chmod +x`): `raspberry-pi-playbooks/utilities/scripts/Depl
 
 ## The Mac
 
-No automatic agents (headless Claude, Remote Control) run on the MacBook, and nothing on the backup Pi can run anything on it (Remote Login off, no Pi → Mac paths); it holds sensitive data. Its launchd jobs only back up: the nightly copy (which the Mac starts, pulling from the Pi), and until #24 wraps up, the iCloud stale check and restore drill. New automation goes on the backup Pi.
+No automatic agents (headless Claude, Remote Control) run on the MacBook, and nothing on the backup Pi can run anything on it (Remote Login off, no Pi → Mac paths); it holds sensitive data. Its only scheduled job is the nightly backup (which the Mac starts, pulling from the Pi); it ends with `mac-playbooks/backup/mac-checks.yml` (newest MacBook backup has its key files, the keychain vault password opens every vars file). New automation goes on the backup Pi.
 
 ## Inventory
 

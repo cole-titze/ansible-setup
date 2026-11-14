@@ -25,28 +25,20 @@
         script: nightly-backup.sh
         hour: 4
         minute: 30
-      # Warns if a backup didn't reach iCloud overnight, nightly-backup included
-      - name: backup-stale-check
-        label: com.coletitze.backup-stale-check
-        script: backup-stale-check.sh
-        hour: 9
-        minute: 0
-      # Saturday, after the nightly backup (4:30): restores the newest iCloud copies to prove they work
-      - name: restore-drill
-        label: com.coletitze.restore-drill
-        script: restore-drill.sh
-        weekday: 6
-        hour: 5
-        minute: 30
-      # alert-agent and weekly-upgrade moved to the backup Pi (utilities/backup-node-alert-agent.yml,
-      # backup-node-weekly-upgrade.yml). Removing a job here doesn't unload it:
-      # launchctl bootout gui/$(id -u)/<label> and rm its plist.
       # At login: start Ollama (nhl-odds assistant). Remote Control runs on the backup Pi.
       - name: login-apps
         label: com.coletitze.login-apps
         script: login-apps.sh
         run_at_load: true
         process_type: Standard
+    # Jobs that moved to the backup Pi (#24): the playbook unloads them and removes their plists.
+    # The stale check and restore drill run there (utilities/backup-node-jobs.yml); the drill's
+    # MacBook-backup and vault checks run at the end of the nightly backup (backup/mac-checks.yml).
+    retired_labels:
+      - com.coletitze.backup-stale-check
+      - com.coletitze.restore-drill
+      - com.coletitze.alert-agent
+      - com.coletitze.weekly-upgrade
 
   # alerting_vars.yml: alerting_discord_webhook_url, the channel the jobs report to
   vars_files:
@@ -93,6 +85,16 @@
       ansible.builtin.command: id -u
       register: uid
       changed_when: false
+
+    - name: Unload retired LaunchAgents
+      ansible.builtin.shell: |
+        p={{ launch_agents_dir }}/{{ item }}.plist
+        launchctl print gui/{{ uid.stdout }}/{{ item }} >/dev/null 2>&1 || [ -e "$p" ] || exit 0
+        launchctl bootout gui/{{ uid.stdout }}/{{ item }} 2>/dev/null
+        rm -f "$p" && echo removed
+      loop: "{{ retired_labels }}"
+      register: retired
+      changed_when: "'removed' in retired.stdout"
 
     # bootout fails if the job isn't loaded yet; that's fine
     - name: Unload changed LaunchAgents
