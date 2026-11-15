@@ -50,7 +50,7 @@ brew install uv                       # manages Python versions, Ansible and pro
 uv python install 3.14 3.15           # 3.15: the nhl-odds Dockerfile's minor; 3.14: Ansible until ansible-core supports 3.15
 uv tool update-shell                  # puts ~/.local/bin (uv tools) on PATH; open a new shell after
 ```
-- **.NET 10 SDK** (nhl-odds targets net10.0): `brew install --cask dotnet-sdk`. It runs Microsoft's installer, so it asks for your password **(manual)**.
+- **.NET SDK** (nhl-odds targets net10.0; the current `dotnet-sdk` cask installs SDK 11, which builds net10.0 too): `brew install --cask dotnet-sdk`. It runs Microsoft's installer, so it asks for your password **(manual)**.
 - Python comes only from uv: don't install python.org or Homebrew Python. Use the newest stable minor in `uv python list --managed-python` for the nhl-odds venv (match its Dockerfile). The `update-mac` skill keeps Pythons, Ansible and the venvs current.
 
 ## 5. Ansible (homelab control machine)
@@ -110,6 +110,7 @@ Install only if wanted: ChatGPT, Firefox, Discord, Minecraft, opencode (`brew in
 2. Look up current coding models with tool-calling support on [ollama.com/library](https://ollama.com/library) (model names change often; don't rely on a remembered list).
 3. Pick the largest one whose download size is at most ~60% of RAM, leaving room for the context window, the OS and an IDE. Mention one size smaller as a faster fallback.
 4. Tell the user the pick and its size, and pull it (`ollama pull <model>`) only after they agree.
+5. Currently pulled on this Mac, besides the assistant model below: `ornith:9b`, plus `ornith-32k` and `qwen3.5-32k` (32k-context copies of `ornith:9b` and `qwen3.5:9b`, made with a Modelfile setting `PARAMETER num_ctx 32768`). No repo uses them.
 
 **Ollama for the nhl-odds site's chat assistant** (the cluster's webapi calls `http://10.42.0.60:11434`, set in `nhl-odds-template.yml`):
 1. `ollama pull qwen3.5:9b` (the webapi's default model; it asks for a 32k context itself).
