@@ -89,7 +89,8 @@
         - { path: /usr/local/lib/homelab, mode: "0755" }
         - { path: /etc/homelab, mode: "0700" }
         - { path: /var/lib/homelab, mode: "0755" }
-        - { path: /var/log/homelab, mode: "0750" }
+        # o+x only: pi's homelab-run writes runs/ inside it; job logs stay unlistable
+        - { path: /var/log/homelab, mode: "0751" }
 
     - name: Write the Discord webhook (root-only)
       ansible.builtin.copy:
