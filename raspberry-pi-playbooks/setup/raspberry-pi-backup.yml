@@ -120,6 +120,24 @@
         minute: "*/1"
         user: root
 
+    # It idled at 78°C (disk 71°C) with only a heatsink; this brought it to
+    # 72°C / 66°C. Takes effect at the next reboot.
+    - name: Turn off the CPU boost (1.5 GHz at a lower voltage)
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/config.txt
+        regexp: '^arm_boost='
+        line: arm_boost=0
+
+    - name: Throttle at 75°C and turn off the unused Wi-Fi and Bluetooth
+      ansible.builtin.blockinfile:
+        path: /boot/firmware/config.txt
+        marker: "# {mark} ANSIBLE MANAGED: backup Pi heat"
+        block: |
+          [all]
+          temp_limit=75
+          dtoverlay=disable-wifi
+          dtoverlay=disable-bt
+
 - name: Apply staggered node maintenance (overrides raspberry-pi role cron)
   import_playbook: ../utilities/backup-node-maintenance.yml
 - name: Pull nightly nhl-odds dumps off the cluster
