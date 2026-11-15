@@ -9,8 +9,9 @@
 # default mode, so anything not on its allow list asks in the app; resets, deletes and secrets denied.
 # Login: `claude auth login` as pi, by hand (setup-token isn't enough for Remote Control); the
 # service is only enabled once ~pi/.claude/.credentials.json exists.
-# Not the PiKVM: its root filesystem is read-only and "pikvm" doesn't resolve from the Pi; run
-# PiKVM playbooks from the Mac.
+# The PiKVM (attached to the desktop, not the Mac) is reached by IP: "pikvm" doesn't resolve on the
+# Pi. Its root filesystem is read-only, so pi's node key is added there by hand (rw, append to
+# /root/.ssh/authorized_keys, ro).
 - name: Let pi on the backup Pi ssh to the backup Pi itself
   hosts: backup_raspberrypi
   gather_facts: false
@@ -40,7 +41,7 @@
     ansible_files: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or mac_home + '/source/ansible-files' }}"
     repo_dir: /home/pi/source/repos/ansible-setup
     # The inventory's ssh key file names, all pi's node key on the Pi
-    inventory_keys: [node01, node02, node03, node04, dockerpibackup]
+    inventory_keys: [node01, node02, node03, node04, dockerpibackup, pikvm]
 
   tasks:
     # ---- Ansible -----------------------------------------------------------------------------
@@ -83,7 +84,7 @@
 
     - name: Scan the inventory hosts' ssh keys
       ansible.builtin.command: "ssh-keyscan -T 5 -t ed25519 {{ item }}"
-      loop: "{{ groups['cluster'] | union(groups['backup_raspberrypi']) | map('extract', hostvars, 'ansible_host') | unique | list }}"
+      loop: "{{ groups['cluster'] | union(groups['backup_raspberrypi']) | union(groups['pikvms']) | map('extract', hostvars, 'ansible_host') | unique | list }}"
       register: host_keys
       changed_when: false
       check_mode: false
