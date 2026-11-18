@@ -307,6 +307,15 @@
                   follow_redirects: true
                   preferred_ip_protocol: ip4
                   valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+              # The nhl-odds probes: the public page goes out to Cloudflare and back in through the tunnel,
+              # and on busy weekday afternoons the home link alone can take 2-5s
+              http_2xx_slow:
+                prober: http
+                timeout: 10s
+                http:
+                  follow_redirects: true
+                  preferred_ip_protocol: ip4
+                  valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
               # Pi-hole probes (PiholeDnsDown): a real lookup through Pi-hole and unbound
               dns_pihole:
                 prober: dns
@@ -469,13 +478,36 @@
           spec:
             # save-uptime.sh and the admin page count one probe as one minute
             interval: 60s
-            module: http_2xx
+            module: http_2xx_slow
             prober:
               url: blackbox-exporter.default.svc:9115
             targets:
               staticConfig:
                 static:
                   - https://nhl.half-built.com/
+
+    # The same home page from inside the cluster (no internet, Cloudflare or tunnel): when the public
+    # probe is slow and this one isn't, it's the home internet link, not the site
+    - name: Probe the nhl-odds site from inside the cluster
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: monitoring.coreos.com/v1
+          kind: Probe
+          metadata:
+            name: nhl-odds-internal
+            namespace: default
+            labels:
+              release: cluster-monitoring
+          spec:
+            interval: 60s
+            module: http_2xx_slow
+            prober:
+              url: blackbox-exporter.default.svc:9115
+            targets:
+              staticConfig:
+                static:
+                  - http://nhl-odds-frontend.nhl-odds.svc/
 
     # Homelab alerts the chart's default rules don't cover. Warning and critical text the phone.
     - name: Deploy homelab alert rules
@@ -493,7 +525,7 @@
             groups:
               - name: homelab
                 rules:
-                  # Single 5s timeouts happen most days; five straight failed minutes is an outage
+                  # Single timeouts happen most weekdays; five straight failed minutes is an outage
                   - alert: NhlOddsSiteDown
                     expr: probe_success{job="probe/default/nhl-odds-public"} == 0
                     for: 5m

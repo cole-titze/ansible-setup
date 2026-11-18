@@ -103,6 +103,32 @@ spec:
         - port: 8080
           protocol: TCP
 ---
+# The blackbox exporter's in-cluster probe of the home page (Probe nhl-odds-internal), to tell a slow
+# site from a slow internet link when the public probe times out
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-blackbox
+  namespace: nhl-odds
+  labels:
+    homelab/netpol: isolation
+spec:
+  podSelector:
+    matchLabels:
+      app: nhl-odds-frontend
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus-blackbox-exporter
+      ports:
+        - port: 8080
+          protocol: TCP
+---
 # The nightly updater's smoke test calls both Services after moving pins; failing it rolls back.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
