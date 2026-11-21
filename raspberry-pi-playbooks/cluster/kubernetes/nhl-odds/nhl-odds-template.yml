@@ -79,7 +79,11 @@ metadata:
   namespace: nhl-odds
 spec:
   instances: 3  # one per worker (node02-04)
-  imageName: ghcr.io/cloudnative-pg/postgresql:18
+  # Exact tag so minors move on purpose. The plain :18 tag (legacy bullseye) froze at 18.6;
+  # newer minors only ship as -trixie. Every DB uses the C collation, so the glibc change
+  # itself needs no REINDEX. 18.7 did need the 8 char(n) (bpchar) indexes reindexed (btree
+  # dedup disabled for bpchar; amcheck flags old ones). Done by hand 2026-11-21 after the move.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.7-standard-trixie
   # enableSuperuserAccess stays true so ansible can still `psql -U postgres` via peer auth
   # in-pod during deploys. CNPG auto-manages the superuser password in a generated secret;
   # no component connects as postgres over the network.
