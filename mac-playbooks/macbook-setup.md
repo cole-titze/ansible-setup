@@ -50,7 +50,7 @@ brew install uv                       # manages Python versions, Ansible and pro
 uv python install 3.14 3.15           # 3.15: the nhl-odds Dockerfile's minor; 3.14: Ansible until ansible-core supports 3.15
 uv tool update-shell                  # puts ~/.local/bin (uv tools) on PATH; open a new shell after
 ```
-- **.NET SDK** (nhl-odds targets net10.0; the current `dotnet-sdk` cask installs SDK 11, which builds net10.0 too): `brew install --cask dotnet-sdk`. It runs Microsoft's installer, so it asks for your password **(manual)**.
+- **.NET SDK** (nhl-odds targets net11.0; the `dotnet-sdk` cask installs SDK 11): `brew install --cask dotnet-sdk`. It runs Microsoft's installer, so it asks for your password **(manual)**.
 - Python comes only from uv: don't install python.org or Homebrew Python. Use the newest stable minor in `uv python list --managed-python` for the nhl-odds venv (match its Dockerfile). The `update-mac` skill keeps Pythons, Ansible and the venvs current.
 
 ## 5. Ansible (homelab control machine)
