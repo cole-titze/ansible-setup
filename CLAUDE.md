@@ -98,7 +98,7 @@ Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains usi
 
 ### Fans (node01)
 
-`utilities/node01-fans.yml` (cluster playbook tag `fans`): two Noctua USB fans in node01's USB ports cool the rack. `homelab-fans.timer` (every minute, root) reads every Pi's CPU temperature from Prometheus and switches node01's USB power with `uhubctl` (a Pi 5 switches all four ports together, so plug nothing else in there). Fans on when the backup Pi hits 65°C (off at 58) or a Pi 5 hits 72 (off at 64), and also when Prometheus is unreachable or a Pi has no reading. Discord gets an alert when a Pi stays hot 15 min with the fans on. Logs: `journalctl -u homelab-fans` (changes only).
+`utilities/node01-fans.yml` (cluster playbook tag `fans`): two Noctua USB fans in node01's USB ports cool the rack. `homelab-fans.timer` (every minute, root) reads every Pi's CPU temperature from Prometheus and switches node01's USB power with `uhubctl` (a Pi 5 switches all four ports together, so plug nothing else in there). Fans on when the backup Pi hits 65°C (off at 50) or a Pi 5 hits 72 (off at 64), at least 7 min per run, and also when Prometheus is unreachable or a Pi has no reading. Discord gets an alert when a Pi stays hot 15 min with the fans on. Logs: `journalctl -u homelab-fans` (changes only).
 
 ### Primary DNS (node04)
 

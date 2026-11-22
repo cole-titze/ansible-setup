@@ -5,7 +5,7 @@ Runs every minute as root. The two Noctua fans are plugged into node01's USB por
 else is: a Pi 5 can only switch all four USB ports together (uhubctl), so this is safe only while
 the ports hold nothing but fans. Reads every Pi's CPU temperature from Prometheus (node01's own
 from sysfs), turns the fans on if any Pi passes its "on" limit and off once every Pi is back under
-its "off" limit.
+its "off" limit, but never before they've run MIN_ON_MIN minutes (fewer, longer cycles).
 
 Fail-safe: fans on if Prometheus can't be reached or a Pi has no reading. A reboot also powers
 the ports (fans on) until the first run.
@@ -23,7 +23,7 @@ import urllib.request
 # nodename -> (on at, off at) in °C. The backup Pi is a Pi 4 that throttles at 75 (temp_limit);
 # the Pi 5s throttle at 85.
 LIMITS = {
-    "dockerpibackup": (65.0, 58.0),
+    "dockerpibackup": (65.0, 50.0),
     "node01": (72.0, 64.0),
     "node02": (72.0, 64.0),
     "node03": (72.0, 64.0),
@@ -39,6 +39,7 @@ STATE_FILE = "/var/lib/homelab-fans/state.json"
 WEBHOOK_FILE = "/etc/homelab/discord-webhook"
 HOT_ALERT_MIN = 15
 PROM_ALERT_MIN = 10
+MIN_ON_MIN = 7  # once on, stay on at least this long
 
 
 def log(msg):
@@ -145,7 +146,9 @@ def main():
     if problems or hot:
         on = True
     elif fans_were_on:
-        on = bool(warm)  # stay on until every Pi is under its "off" limit
+        # stay on for the minimum run, then until every Pi is under its "off" limit
+        ran_min = now - state.get("on_since", 0) >= MIN_ON_MIN * 60
+        on = bool(warm) or not ran_min
     else:
         on = False
 
@@ -154,6 +157,10 @@ def main():
     if on != fans_were_on or "on" not in state:
         why = "; ".join(problems) or (f"hot: {', '.join(hot)}" if hot else f"warm: {', '.join(warm)}" if on else "all cool")
         log(f"fans {'ON' if on else 'OFF'} ({why}) {summary}")
+    if on and not fans_were_on:
+        state["on_since"] = now
+    elif not on:
+        state.pop("on_since", None)
     state["on"] = on
 
     # Hot with the fans running: the fans aren't keeping up
