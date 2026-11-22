@@ -272,6 +272,10 @@
   import_playbook: ../../utilities/k8s-node-maintenance.yml
   tags: ['node-maintenance']
 
+- name: Set up the temperature-controlled USB fans on node01.
+  import_playbook: ../../utilities/node01-fans.yml
+  tags: ['fans']
+
 - name: Set up kured (one-at-a-time drained reboots).
   import_playbook: kured/kured.yml
   tags: ['kured']

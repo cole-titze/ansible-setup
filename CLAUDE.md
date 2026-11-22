@@ -96,6 +96,10 @@ Currently active K8s services (tags in `raspberry-pi-cluster.yml`): `helm`, `tra
 
 Traefik runs as a DaemonSet and handles TLS for `.kubecluster` local domains using `IngressRoute` CRDs (`traefik.io/v1alpha1`). It generates a self-signed wildcard cert for `*.kubecluster` using the `community.crypto` collection.
 
+### Fans (node01)
+
+`utilities/node01-fans.yml` (cluster playbook tag `fans`): two Noctua USB fans in node01's USB ports cool the rack. `homelab-fans.timer` (every minute, root) reads every Pi's CPU temperature from Prometheus and switches node01's USB power with `uhubctl` (a Pi 5 switches all four ports together, so plug nothing else in there). Fans on when the backup Pi hits 65°C (off at 58) or a Pi 5 hits 72 (off at 64), and also when Prometheus is unreachable or a Pi has no reading. Discord gets an alert when a Pi stays hot 15 min with the fans on. Logs: `journalctl -u homelab-fans` (changes only).
+
 ### Primary DNS (node04)
 
 node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary Pi-hole + unbound on the host, outside Kubernetes. It keeps IP .2 because DHCP hands it out as the primary DNS; `dockerpi_backup` (.3) is the standalone secondary and takes over DHCP after .2 misses 3 pings in a row (one check per minute, `setup/pihole-failover-check.sh`, timestamped log `/var/log/pihole-failover.log`). Its K3s agent uses `/etc/k3s-resolv.conf` (`k3s_resolv_conf` host var) because the host resolver is 127.0.0.1, which K3s rejects.

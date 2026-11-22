@@ -1,0 +1,83 @@
+---
+# Temperature-controlled USB fans: two Noctua 5V USB fans plugged into node01's USB ports cool
+# the rack. Every minute homelab-fans.timer reads each Pi's CPU temperature from Prometheus and
+# switches node01's USB power with uhubctl (files/homelab/pi-fans.py has the limits).
+# A Pi 5 switches all four USB ports together, so plug nothing but the fans into node01.
+# Status: journalctl -u homelab-fans (logs only changes); state /var/lib/homelab-fans/state.json
+# Test by hand on node01: sudo uhubctl -l 2 -a 0 && sudo uhubctl -l 4 -a 0 (off), -a 1 (on)
+- name: Temperature-controlled fans on node01
+  hosts: control_plane
+  gather_facts: false
+  become: true
+
+  # alerting_vars.yml: alerting_discord_webhook_url
+  vars_files:
+    - "{{ lookup('env', 'ANSIBLE_FILES_PATH') or lookup('env', 'HOME') + '/source/ansible-files' }}/vars/alerting_vars.yml"
+
+  tasks:
+    - name: Install uhubctl
+      ansible.builtin.apt:
+        name: uhubctl
+        state: present
+
+    - name: Create /etc/homelab
+      ansible.builtin.file:
+        path: /etc/homelab
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Write the Discord webhook (root-only)
+      ansible.builtin.copy:
+        content: "{{ alerting_discord_webhook_url }}\n"
+        dest: /etc/homelab/discord-webhook
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Install the fan control script
+      ansible.builtin.copy:
+        src: files/homelab/pi-fans.py
+        dest: /usr/local/bin/homelab-fans
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the service and timer
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.name }}"
+        content: "{{ item.content }}"
+        mode: "0644"
+      loop:
+        - name: homelab-fans.service
+          content: |
+            [Unit]
+            Description=Switch node01's USB fans by Pi temperatures
+
+            [Service]
+            Type=oneshot
+            ExecStart=/usr/local/bin/homelab-fans
+            TimeoutStartSec=90
+        - name: homelab-fans.timer
+          content: |
+            [Unit]
+            Description=Check Pi temperatures for the fans every minute
+
+            [Timer]
+            OnBootSec=1min
+            OnUnitActiveSec=1min
+            AccuracySec=5s
+
+            [Install]
+            WantedBy=timers.target
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Enable the timer
+      ansible.builtin.systemd_service:
+        name: homelab-fans.timer
+        enabled: true
+        state: started
+        daemon_reload: true
