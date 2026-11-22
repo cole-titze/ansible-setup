@@ -197,6 +197,17 @@ spec:
             # pushed the heap to the ~192Mi default cap (75% of 256Mi), causing GC pauses, hence 512Mi.
             - name: DOTNET_gcServer
               value: "0"
+            # Temporary (11-22): webapi exits with SIGSEGV (139) about once a day per pod since 11-18, with no
+            # .NET error logged. On a crash .NET writes a heap dump to /tmp (an emptyDir, so it survives the
+            # container restart; copy it off with kubectl cp) and logs the signal + address. Remove once found.
+            - name: DOTNET_DbgEnableMiniDump
+              value: "1"
+            - name: DOTNET_DbgMiniDumpType
+              value: "2"
+            - name: DOTNET_DbgMiniDumpName
+              value: /tmp/crash-%p-%t.dmp
+            - name: DOTNET_CreateDumpDiagnostics
+              value: "1"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -256,7 +267,8 @@ spec:
               mountPath: /tmp
       volumes:
         - name: tmp
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 2Gi  # room for a few crash dumps (~100-250MB each)
 
 ---
 apiVersion: v1
