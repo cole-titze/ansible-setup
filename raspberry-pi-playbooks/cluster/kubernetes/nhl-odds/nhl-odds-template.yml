@@ -214,7 +214,7 @@ spec:
                   name: nhl-odds-web-credentials
                   key: password
             - name: NHL_DATABASE
-              value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_web;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+              value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_web;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
             - name: ADMIN_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -869,7 +869,7 @@ spec:
                       name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
 
 ---
 # CronJob: Daily odds fetch — NextDayOdds (6am CT) — replaces scheduler/daily-odds-fetch.sh step 1
@@ -913,7 +913,7 @@ spec:
                       name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
                 - name: ODDS_API_KEY
                   valueFrom:
                     secretKeyRef:
@@ -966,7 +966,7 @@ spec:
                       name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
                 - name: ODDS_API_KEY
                   valueFrom:
                     secretKeyRef:
@@ -1015,7 +1015,7 @@ spec:
                       name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
 
 ---
 # CronJob: Lineup projections article snapshot (every 30 min, 10am-11:30pm CT) — LineupSnapshot
@@ -1068,7 +1068,7 @@ spec:
                       name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
 
 ---
 # CronJob: rebuild the site-search indices from Postgres (hourly at :20, after the :00/:30 lineup snapshots
@@ -1122,11 +1122,11 @@ spec:
                       name: nhl-odds-writer-credentials
                       key: password
                 - name: NHL_DATABASE
-                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-rw;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
                 # The documents come from the replicas: reading every team, player, game and article each hour
                 # took the primary to a full core and slowed the site's pages (heavy load test 158)
                 - name: NHL_DATABASE_READ
-                  value: "Host=nhl-odds-database-ro;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable"
+                  value: "Host=nhl-odds-database-ro;Database=nhl;Username=nhl_writer;Password=$(POSTGRES_PASSWORD);GSS Encryption Mode=Disable;SSL Mode=Require"
                 - name: ELASTICSEARCH_URL
                   value: http://nhl-odds-elasticsearch:9200
                 - name: ELASTICSEARCH_USERNAME
