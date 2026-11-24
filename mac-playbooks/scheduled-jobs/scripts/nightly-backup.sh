@@ -14,7 +14,12 @@ LOG="$LOG_DIR/nightly-backup-$(date +%Y-%m-%d).log"
   echo "== Nightly backup $(date '+%Y-%m-%d %H:%M:%S')"
   cd "$REPO" || exit 1
   git pull --ff-only --quiet || echo "WARN: git pull failed, using the current checkout"
-  bash mac-playbooks/backup/scripts/Backup.sh
+  # Cap the run so a hang (e.g. an iCloud stall) fails loudly instead of blocking the next nights:
+  # launchd skips a run while the previous one is still going. Normal runs take 15-40 min.
+  timeout -k 60 3h bash mac-playbooks/backup/scripts/Backup.sh
+  rc=$?
+  [ $rc -eq 124 ] && echo "ERROR: backup timed out after 3h and was killed"
+  ( exit $rc )
 } >>"$LOG" 2>&1
 status=$?
 

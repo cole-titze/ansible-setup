@@ -13,7 +13,7 @@
     backup_pi: pi@10.42.0.3
     offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
     staging_backup_dir: "{{ lookup('env', 'HOME') }}/source/backups/nhl-odds/"
-    icloud_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/"
+    icloud_backup_dir: "{{ lookup('env', 'HOME') }}/Documents/homelab-backups/nhl-odds/"
     staging_keep: 15
     # iCloud keeps the newest 7 dumps plus the newest dump of each of the 4 weeks before them,
     # so about a month of history in 11 files (~2.4 GB each)

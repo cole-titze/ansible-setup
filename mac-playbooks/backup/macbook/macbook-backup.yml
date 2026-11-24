@@ -21,7 +21,7 @@
           - "--include=projects/*/memory/***"
           - "--exclude=*"
 
-    icloud_base_dir: "{{ lookup('env', 'HOME') }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
+    icloud_base_dir: "{{ lookup('env', 'HOME') }}/Documents/homelab-backups/macbook"
 
   tasks:
     # set_fact evaluates the pipe lookup once and stores the result; a plain `vars:` entry
@@ -57,16 +57,20 @@
       ansible.builtin.debug:
         msg: "Backup completed! File saved as: {{ macbook_backup_dir }}"
 
+    # Pruning is housekeeping: if iCloud stalls (on 2026-11-22 opendir hung for 35h and blocked
+    # every later backup), give up after 5 minutes and carry on to the Pi/DB backups.
     - name: Find all backup directories
       ansible.builtin.find:
         paths: "{{ icloud_base_dir }}"
         patterns: "backup_*"
         file_type: directory
       register: found_backups
+      timeout: 300
+      ignore_errors: true
 
     - name: Sort backups by modification time (newest first)
       ansible.builtin.set_fact:
-        sorted_backups: "{{ found_backups.files | sort(attribute='mtime', reverse=true) }}"
+        sorted_backups: "{{ found_backups.files | default([]) | sort(attribute='mtime', reverse=true) }}"
 
     - name: Filter backups older than 30 days, excluding the most recent
       ansible.builtin.set_fact:
@@ -83,3 +87,5 @@
         state: absent
       loop: "{{ deletable_backups }}"
       when: deletable_backups | length > 0
+      timeout: 300
+      ignore_errors: true

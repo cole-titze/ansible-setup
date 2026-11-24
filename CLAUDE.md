@@ -110,7 +110,9 @@ node04 (10.42.0.2, formerly dockerpi) is a K3s worker that also runs the primary
 
 `utilities/backup-node-db-pull.yml` (also imported by `setup/raspberry-pi-backup.yml`): at 4:00 `dockerpi_backup` pulls the day's nhl-odds dump from the first worker that has it into `/home/pi/backups/nhl-odds` (keeps 30) and the Grafana DBs from every worker into `/home/pi/backups/grafana` (keeps 35), and writes a `SHA256SUMS` in each (log `/var/log/nhl-backup-pull.log`). Its key is limited on workers to read-only `rrsync` of `/home/pi/backups`.
 
-The pull also copies pi's Claude memory, settings and `~pi/claude-work` into `/home/pi/backups/claude/`; the Mac stores them in iCloud as `backups/backup-pi-claude/backup_<date>` (30 days, `mac-playbooks/backup/offsite/claude-backup.yml`) and never loads them.
+The pull also copies pi's Claude memory, settings and `~pi/claude-work` into `/home/pi/backups/claude/`; the Mac stores them in iCloud as `~/Documents/homelab-backups/backup-pi-claude/backup_<date>` (30 days, `mac-playbooks/backup/offsite/claude-backup.yml`) and never loads them.
+
+The Mac's nightly backup writes everything to `~/Documents/homelab-backups/` (Documents syncs to iCloud), not `~/source/ansible-files`: macOS privacy only lets the launchd job's Python (Ansible's uv Python 3.15) into Documents; iCloud Drive is denied, and a missing grant hangs the job instead of failing (2026-11-22). A new Python binary (e.g. a `uv tool install --python` bump) needs the Documents grant again: run a background job that opens `~/Documents` with it and click Allow.
 
 The Mac's nightly backup (4:30) copies those folders into iCloud through a non-iCloud staging dir, checks the new iCloud copies against `SHA256SUMS`, then runs `mark-copied` on the Pi. Its key (`~/.ssh/backuppi_offsite`) is limited on the Pi to read-only `rrsync` of `/home/pi/backups` plus `mark-copied` (`homelab-offsite-access`), which writes `/var/lib/homelab/mac-last-copied`.
 

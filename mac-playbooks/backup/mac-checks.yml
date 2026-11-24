@@ -13,7 +13,7 @@
 
   vars:
     home: "{{ lookup('env', 'HOME') }}"
-    macbook_backups_dir: "{{ home }}/Library/Mobile Documents/com~apple~CloudDocs/ansible-files/backups/macbook"
+    macbook_backups_dir: "{{ home }}/Documents/homelab-backups/macbook"
     vars_dir: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or home + '/source/ansible-files' }}/vars"
     key_folders: [kube, ssh, claude]
 

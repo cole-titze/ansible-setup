@@ -151,7 +151,7 @@ Pull a backup from the cluster to your Mac:
 ```bash
 ansible-playbook -i inventories/inventory.ini mac-playbooks/backup/backup.yml -t nhl-odds
 ```
-This saves to `~/source/ansible-files/backups/nhl-odds/nhl.dump`.
+This saves to `~/Documents/homelab-backups/nhl-odds/nhl.dump`.
 
 To restore on next deploy, ensure that file exists — the deploy playbook checks for it automatically and restores it after the pods start.
 
