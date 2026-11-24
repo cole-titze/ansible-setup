@@ -5,7 +5,7 @@
 #   nhl_odds_api_backfill_key
 #
 # Optional backup restore:
-#   Place a pg_dump file at ~/Documents/homelab-backups/nhl-odds/nhl.dump
+#   Place a pg_dump file at ~/source/ansible-files/backups/nhl-odds/nhl.dump
 #   on the control machine. If present, it will be restored into the database
 #   after deployment.
 
@@ -16,7 +16,7 @@
 
   vars:
     ansible_files_path: "{{ lookup('env', 'ANSIBLE_FILES_PATH') or '~/source/ansible-files' }}"
-    local_backup_path: "{{ lookup('env', 'HOME') }}/Documents/homelab-backups/nhl-odds/nhl.dump"
+    local_backup_path: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/nhl-odds/nhl.dump"
     # The restore Job reads the dump from this worker's disk. kubectl cp/exec of a multi-GB dump
     # into the pod times out (2026-10-17 rebuild), so nothing streams through the API server.
     restore_node: "{{ groups['storage'][0] }}"

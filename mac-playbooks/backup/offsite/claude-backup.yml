@@ -11,7 +11,7 @@
     backup_pi: pi@10.42.0.3
     offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
     staging_dir: "{{ lookup('env', 'HOME') }}/source/backups/backup-pi-claude/"
-    icloud_base_dir: "{{ lookup('env', 'HOME') }}/Documents/homelab-backups/backup-pi-claude"
+    icloud_base_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/backup-pi-claude"
     keep_days: 30
 
   tasks:

@@ -26,9 +26,9 @@ gh auth login            # (manual)
 `ansible-files` in iCloud holds secrets, cluster vars, and Mac backups (outside any git repo). Wait for iCloud Drive to finish syncing first **(manual)**.
 ```bash
 mkdir -p ~/source/repos
-ln -s ~/Library/Mobile\ Documents/com~apple~CloudDocs/ansible-files ~/source/ansible-files
+ln -s ~/Documents/ansible-files ~/source/ansible-files
 ```
-Restore from the newest `~/Documents/homelab-backups/macbook/backup_*/` (written by `mac-playbooks/backup/macbook/macbook-backup.yml`):
+Restore from the newest `~/source/ansible-files/backups/macbook/backup_*/` (written by `mac-playbooks/backup/macbook/macbook-backup.yml`):
 - `ssh/` → `~/.ssh`, then `chmod 700 ~/.ssh && chmod 600 ~/.ssh/id_*`
 - `kube/` → `~/.kube`
 - `claude/` → `~/.claude` (Claude Code settings and per-project memories; skills come from the claude-skills repo in step 6). Copy it before the first Claude Code session so the memories are picked up.

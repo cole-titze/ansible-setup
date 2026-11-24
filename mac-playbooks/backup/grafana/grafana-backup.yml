@@ -13,7 +13,7 @@
     backup_pi: pi@10.42.0.3
     offsite_key: "{{ lookup('env', 'HOME') }}/.ssh/backuppi_offsite"
     staging_backup_dir: "{{ lookup('env', 'HOME') }}/source/backups/grafana/"
-    local_backup_dir: "{{ lookup('env', 'HOME') }}/Documents/homelab-backups/grafana/"
+    local_backup_dir: "{{ lookup('env', 'HOME') }}/source/ansible-files/backups/grafana/"
     # Same as the Pi keeps, so a deleted file is never one the next run would copy again
     local_keep: 35
     # /usr/bin/rsync and ssh: under launchd, macOS Local Network privacy only lets Apple's binaries
