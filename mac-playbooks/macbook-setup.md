@@ -18,7 +18,7 @@ Rules for the agent:
 ```bash
 xcode-select --install   # git, make, clang
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install gh libomp mas   # libomp: LightGBM/XGBoost/torch in nhl-odds; mas: App Store updates for update-mac
+brew install gh libomp mas ripgrep   # libomp: LightGBM/XGBoost/torch in nhl-odds; mas: App Store updates for update-mac; ripgrep: fast code search (rg)
 gh auth login            # (manual)
 ```
 
