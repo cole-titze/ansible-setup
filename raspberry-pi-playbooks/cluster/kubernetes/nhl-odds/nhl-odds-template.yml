@@ -549,7 +549,7 @@ spec:
       # registry.ollama.ai, which nhl-odds has
       initContainers:
         - name: pull-model
-          image: ollama/ollama:0.40.17
+          image: ollama/ollama:0.40.19
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "ollama serve >/dev/null 2>&1 & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull \"$MODEL\""]
           env:
@@ -571,7 +571,7 @@ spec:
       containers:
         - name: ollama
           # Multi-arch image; pinned like Elasticsearch so a rollout can't change the server under the model
-          image: ollama/ollama:0.40.17
+          image: ollama/ollama:0.40.19
           imagePullPolicy: IfNotPresent
           env:
             - name: HOME
