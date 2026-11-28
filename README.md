@@ -193,13 +193,13 @@ The nightly backup (launchd, 4:30) copies the backup Pi's nhl-odds dumps and Gra
 The backup Pi (`dockerpi_backup`) runs the homelab's scheduled jobs and a Claude Code Remote Control session, so day-to-day running doesn't need the Mac:
 
 ```bash
-# Backup stale check (9:00), restore drill (Sat 5:00), the Mac's offsite-copy key
+# Backup stale check (9:00), restore drill (Sat 4:15), Lighthouse (Sat 4:30), the Mac's offsite-copy key
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-jobs.yml
 # Alert agent (every minute)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-alert-agent.yml
 # Remote Control (claude-rc.service)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-remote-control.yml
-# Weekly upgrade (Sat 10:00; needs gh logged in as pi first)
+# Weekly upgrade (Sat after the 4:30 Lighthouse run; needs gh logged in as pi first)
 ansible-playbook -i inventories/inventory.ini raspberry-pi-playbooks/utilities/backup-node-weekly-upgrade.yml
 ```
 

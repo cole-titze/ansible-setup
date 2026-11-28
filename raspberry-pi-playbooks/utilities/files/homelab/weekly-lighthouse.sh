@@ -1,6 +1,6 @@
 #!/bin/bash
 # Weekly Lighthouse report on the live nhl-odds site, started by homelab-weekly-lighthouse.timer
-# (Sat 7:15 CT, backup-node-jobs.yml) so the 10:00 weekly upgrade can read it. Runs here, not
+# (Sat 4:30 CT, backup-node-jobs.yml); the weekly upgrade starts when it ends and reads it. Runs here, not
 # in GitHub Actions: Cloudflare answers GitHub's runners with 403s.
 # As pi: updates a sparse clone of nhl-odds' frontend, then runs its `npm run lighthouse`
 # (frontend/lighthouse/run.mjs) with LIGHTHOUSE_URL set, inside the Playwright image that

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Weekly proof that the backup Pi's copies restore, started by homelab-restore-drill.timer on
-# Saturdays at 5:00 CT, after the 4:00 pull (backup-node-jobs.yml). Posts the result to Discord.
+# Saturdays at 4:15 CT, after the 4:00 pull (backup-node-jobs.yml). Posts the result to Discord.
 # - nhl-odds: newest dump -> a throwaway PostgreSQL 18 (prod's major) in a scratch folder, socket
 #   only, then sanity checks
 # - Grafana: SQLite integrity check on the newest grafana-*.db (dashboards are in git; it holds stars + users)
