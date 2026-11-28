@@ -126,8 +126,7 @@ spec:
       services:
         - name: retirement-calculator
           port: 80
-  tls:
-    secretName: local-cert
+  tls: {}
 
 ---
 apiVersion: v1

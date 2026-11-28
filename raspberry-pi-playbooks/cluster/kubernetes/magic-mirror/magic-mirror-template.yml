@@ -80,5 +80,4 @@ spec:
       services:
         - name: magic-mirror
           port: 8082
-  tls:
-    secretName: local-cert
+  tls: {}

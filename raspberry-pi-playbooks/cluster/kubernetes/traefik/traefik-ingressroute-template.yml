@@ -37,3 +37,14 @@ spec:
           kind: TraefikService
   tls:
     secretName: local-cert
+---
+# Serves the *.kubecluster cert for every route. Routes in other namespaces use `tls: {}`:
+# a secretName there is looked up in the route's own namespace, where local-cert doesn't exist.
+apiVersion: traefik.io/v1alpha1
+kind: TLSStore
+metadata:
+  name: default
+  namespace: traefik
+spec:
+  defaultCertificate:
+    secretName: local-cert

@@ -122,8 +122,7 @@
                 services:
                   - name: longhorn-frontend
                     port: 80
-            tls:
-              secretName: local-cert
+            tls: {}
 
     - name: Wait for Longhorn pods to be ready
       kubernetes.core.k8s_info:

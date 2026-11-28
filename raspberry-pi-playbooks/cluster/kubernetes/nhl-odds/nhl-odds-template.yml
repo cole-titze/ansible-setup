@@ -811,8 +811,7 @@ spec:
       services:
         - name: nhl-odds-frontend
           port: 80
-  tls:
-    secretName: local-cert
+  tls: {}
 
 ---
 # CronJob: Daily NHL data collection (3am CT) — replaces scheduler/daily-data-collection.sh
