@@ -334,7 +334,7 @@ spec:
       containers:
         - name: elasticsearch
           # The official image; arm64 build. Pinned: a major/minor bump can change index formats
-          image: docker.elastic.co/elasticsearch/elasticsearch:9.5.6
+          image: docker.elastic.co/elasticsearch/elasticsearch:9.5.7
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
