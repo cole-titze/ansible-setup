@@ -31,7 +31,7 @@
           loki:
             # The chart's default tag lags the Loki patch releases (chart 7.7.0 still ships 3.6.20)
             image:
-              tag: 3.6.22
+              tag: 3.6.23
             # One tenant; nothing outside the cluster can reach it
             auth_enabled: false
             commonConfig:
