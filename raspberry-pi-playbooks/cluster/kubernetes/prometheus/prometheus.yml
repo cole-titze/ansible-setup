@@ -291,7 +291,7 @@
       kubernetes.core.helm:
         name: blackbox-exporter
         chart_ref: prometheus-community/prometheus-blackbox-exporter
-        chart_version: "11.21.3"
+        chart_version: "12.0.0"
         update_repo_cache: true
         release_namespace: default
         state: present
