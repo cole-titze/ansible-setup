@@ -80,7 +80,7 @@ spec:
             value: "0"
       containers:
         - name: traefik
-          image: traefik:v3.7
+          image: traefik:v3.8
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false

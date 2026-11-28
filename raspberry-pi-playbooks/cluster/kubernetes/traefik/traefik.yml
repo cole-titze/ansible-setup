@@ -60,9 +60,11 @@
         kind: Namespace
         state: present
 
+    # Keep the CRDs on the same minor as the traefik image (traefik-template.yml): each minor's
+    # migration notes add CRD fields, and the v3.0 CRDs would prune them.
     - name: Install Traefik CRDs
       ansible.builtin.shell: >-
-        kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.0/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
+        kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.8/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
       register: traefik_crds
       changed_when: "'configured' in traefik_crds.stdout or 'created' in traefik_crds.stdout"
 
